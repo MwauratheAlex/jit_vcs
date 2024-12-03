@@ -7,9 +7,7 @@ import (
 )
 
 func main() {
-	args := os.Args[1:]
-
-	if err := command.Execute(args); err != nil {
+	if err := command.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}

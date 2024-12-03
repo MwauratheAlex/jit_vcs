@@ -1,9 +1,17 @@
 package command
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
-func Execute(args []string) error {
-	command := args[0]
+func Execute() error {
+	if len(os.Args) < 2 {
+		return fmt.Errorf("Usage: jit <command> [options]")
+	}
+
+	command := os.Args[1]
+	args := os.Args[2:]
 
 	switch command {
 	case "init":

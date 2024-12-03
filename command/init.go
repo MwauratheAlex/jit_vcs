@@ -1,54 +1,57 @@
 package command
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 )
 
 const (
-	repoPath   = ".jit"
-	refsDir    = "refs"
-	objectsDir = "objects"
-	headPath   = "HEAD"
+	REPO_DIR    = ".jit"
+	REFS_DIR    = "refs"
+	OBJECTS_DIR = "objects"
+	HEAD_PATH   = "HEAD"
 )
 
 func Init(args []string) error {
-	if len(args) > 1 {
+	if len(args) > 0 {
 		return fmt.Errorf("usage: jit init")
 	}
 
-	if _, err := os.Stat(repoPath); errors.Is(err, os.ErrExist) {
-		return fmt.Errorf("A repository already exists at %s", repoPath)
+	if _, err := os.Stat(REPO_DIR); err == nil {
+		return fmt.Errorf("A repository already exists at %s", REPO_DIR)
 	}
 
 	// create .jit directory
-	if err := os.Mkdir(repoPath, 0755); err != nil {
+	if err := os.Mkdir(REPO_DIR, 0755); err != nil {
 		return fmt.Errorf("Failed to create directory: %s\n%s",
-			repoPath, err,
+			REPO_DIR, err,
 		)
 	}
 
 	// create .jit/refs, .jit/objects dirs
-	for _, dir := range []string{refsDir, objectsDir} {
-		dirPath := filepath.Join(repoPath, dir)
-		if err := os.MkdirAll(dirPath, 0755); err != nil {
+	dirs := []string{
+		filepath.Join(REPO_DIR, OBJECTS_DIR),
+		filepath.Join(REPO_DIR, REFS_DIR, "heads"),
+	}
+
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("Failed to create directory: %s\n%s",
-				dirPath, err,
+				dir, err,
 			)
 		}
 	}
 
-	// create HEAD
-	headFileContent := []byte("ref: refs/heads/main\n")
-	headDir := filepath.Join(repoPath, headPath)
-	if err := os.WriteFile(headDir, headFileContent, 0644); err != nil {
+	// create .jit/HEAD
+	headFilePath := filepath.Join(REPO_DIR, HEAD_PATH)
+	headFileContent := []byte("ref: refs/heads/master\n")
+	if err := os.WriteFile(headFilePath, headFileContent, 0644); err != nil {
 		return fmt.Errorf("Failed to write to file: %s\n%s",
-			headDir, err,
+			headFilePath, err,
 		)
 	}
 
-	fmt.Printf("Initialized empty jit repository in %s\n", repoPath)
+	fmt.Printf("Initialized empty jit repository in %s\n", REPO_DIR)
 	return nil
 }
