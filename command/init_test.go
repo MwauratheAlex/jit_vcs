@@ -4,13 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"jit_vcs/config"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func cleanup() {
-	os.RemoveAll(REPO_DIR)
+	os.RemoveAll(config.REPO_DIR)
 }
 
 func TestInit(t *testing.T) {
@@ -25,9 +26,9 @@ func TestInit(t *testing.T) {
 
 		// Check directories
 		dirs := []string{
-			REPO_DIR,
-			filepath.Join(REPO_DIR, OBJECTS_DIR),
-			filepath.Join(REPO_DIR, REFS_DIR, "heads"),
+			config.REPO_DIR,
+			filepath.Join(config.REPO_DIR, config.OBJECTS_DIR),
+			filepath.Join(config.REPO_DIR, config.REFS_DIR, "heads"),
 		}
 
 		for _, dir := range dirs {
@@ -42,7 +43,7 @@ func TestInit(t *testing.T) {
 
 		// Check .jit/HEAD
 		t.Run("Check file .jit/HEAD", func(t *testing.T) {
-			_, err := os.Stat(filepath.Join(REPO_DIR, HEAD_PATH))
+			_, err := os.Stat(filepath.Join(config.REPO_DIR, config.HEAD_PATH))
 			if errors.Is(err, fs.ErrNotExist) {
 				t.Errorf(".jit/HEAD not created")
 			}
@@ -50,7 +51,7 @@ func TestInit(t *testing.T) {
 
 		// Check .jit/HEAD content
 		t.Run("Check content of .jit/HEAD", func(t *testing.T) {
-			content, err := os.ReadFile(filepath.Join(REPO_DIR, HEAD_PATH))
+			content, err := os.ReadFile(filepath.Join(config.REPO_DIR, config.HEAD_PATH))
 			if err != nil {
 				t.Errorf("Failed to read .jit/HEAD: %v", err)
 			}
@@ -62,7 +63,7 @@ func TestInit(t *testing.T) {
 	})
 
 	t.Run("Fail if repository already exists", func(t *testing.T) {
-		os.Mkdir(REPO_DIR, 0755) // Simulate existing repo
+		os.Mkdir(config.REPO_DIR, 0755) // Simulate existing repo
 		defer cleanup()
 		err := Init([]string{})
 		if err == nil {
