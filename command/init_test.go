@@ -19,7 +19,26 @@ func TestInit(t *testing.T) {
 	cleanup()
 
 	t.Run("Initialize repository", func(t *testing.T) {
-		err := Init([]string{})
+		// setup temp dir and cd into it
+		tempDir := t.TempDir()
+		defer os.RemoveAll(tempDir)
+
+		currDir, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("Failed to get current working directory: %v", err)
+		}
+		defer func() {
+			if err := os.Chdir(currDir); err != nil {
+				t.Fatalf("Failed to restore working directory: %v", err)
+			}
+		}()
+
+		if err := os.Chdir(tempDir); err != nil {
+			t.Fatalf("Failed to change working directory: %v", err)
+		}
+
+		// testing
+		err = Init([]string{})
 		if err != nil {
 			t.Fatalf("Init failed: %v", err)
 		}
