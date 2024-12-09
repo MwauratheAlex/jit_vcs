@@ -10,38 +10,23 @@ import (
 	"testing"
 )
 
-func cleanup() {
-	os.RemoveAll(config.REPO_DIR)
-}
-
 func TestInit(t *testing.T) {
-	defer cleanup()
-	cleanup()
+	currDir := SetupTempDirCd(t)
+	defer ChangeDirectory(currDir, t)
 
 	t.Run("Initialize repository", func(t *testing.T) {
-		// setup temp dir and cd into it
-		tempDir := t.TempDir()
-		defer os.RemoveAll(tempDir)
-
-		currDir, err := os.Getwd()
-		if err != nil {
-			t.Fatalf("Failed to get current working directory: %v", err)
-		}
-		defer func() {
-			if err := os.Chdir(currDir); err != nil {
-				t.Fatalf("Failed to restore working directory: %v", err)
-			}
-		}()
-
-		if err := os.Chdir(tempDir); err != nil {
-			t.Fatalf("Failed to change working directory: %v", err)
-		}
 
 		// testing
-		err = Init([]string{})
+		err := Init([]string{})
 		if err != nil {
 			t.Fatalf("Init failed: %v", err)
 		}
+
+		t.Run("Fail if Repository exists", func(t *testing.T) {
+			if err := Init([]string{}); err == nil {
+				t.Errorf("Expected error when repository already exists, got nil")
+			}
+		})
 
 		// Check directories
 		dirs := []string{
@@ -79,15 +64,6 @@ func TestInit(t *testing.T) {
 				t.Errorf("Unexpected content in .jit/HEAD: got %s, want %s", string(content), expected)
 			}
 		})
-	})
-
-	t.Run("Fail if repository already exists", func(t *testing.T) {
-		os.Mkdir(config.REPO_DIR, 0755) // Simulate existing repo
-		defer cleanup()
-		err := Init([]string{})
-		if err == nil {
-			t.Errorf("Expected error when repository already exists, got nil")
-		}
 	})
 
 	t.Run("Fail if arguments are provided", func(t *testing.T) {

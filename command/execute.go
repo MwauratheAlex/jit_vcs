@@ -1,6 +1,7 @@
 package command
 
 import (
+	"flag"
 	"fmt"
 	"os"
 )
@@ -17,9 +18,13 @@ func Execute() error {
 	case "init":
 		return Init(args)
 	case "add":
-		return Add(args)
+		paths := args
+		return Add(paths)
 	case "commit":
-		return Commit(args)
+		msgFlag := flag.NewFlagSet("commit", flag.ExitOnError)
+		msg := msgFlag.String("m", "", "Commit message")
+		_ = msgFlag.Parse(args)
+		return Commit(*msg)
 	default:
 		return fmt.Errorf("Unknown command: %s", command)
 	}

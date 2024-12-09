@@ -10,23 +10,9 @@ import (
 )
 
 func TestAdd(t *testing.T) {
-	// setup temp dir and cd into it
-	tempDir := t.TempDir()
-	defer os.RemoveAll(tempDir)
-
-	currDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current working directory: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(currDir); err != nil {
-			t.Fatalf("Failed to restore working directory: %v", err)
-		}
-	}()
-
-	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to change working directory: %v", err)
-	}
+	// setup
+	currDir := SetupTempDirCd(t)
+	defer ChangeDirectory(currDir, t)
 
 	if err := Init([]string{}); err != nil {
 		t.Fatalf("Init failed: %v", err)

@@ -2,14 +2,18 @@ package command
 
 import (
 	"fmt"
-	"jit_vcs/vcs"
+	"jit_vcs/internal"
 )
 
 func Add(paths []string) error {
-	// TODO: Make this concurrent
 
+	if len(paths) < 1 {
+		return fmt.Errorf("No file specified.\nUsage: jit add <file>")
+	}
+
+	// TODO: Make this concurrent
 	for _, path := range paths {
-		if err := vcs.AddToIndex(path); err != nil {
+		if err := internal.AddToIndex(path); err != nil {
 			return err
 		}
 		fmt.Printf("Added '%s' to staging area.\n", path)

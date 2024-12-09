@@ -9,7 +9,7 @@ import (
 
 func Init(args []string) error {
 	if len(args) > 0 {
-		return fmt.Errorf("usage: jit init")
+		return fmt.Errorf("Usage: jit init")
 	}
 
 	if _, err := os.Stat(config.REPO_DIR); err == nil {
@@ -46,6 +46,7 @@ func Init(args []string) error {
 		)
 	}
 
-	fmt.Printf("Initialized empty jit repository in %s\n", config.REPO_DIR)
+	abs_dir, _ := filepath.Abs(config.REPO_DIR)
+	fmt.Printf("Initialized empty jit repository in %s\n", abs_dir)
 	return nil
 }
