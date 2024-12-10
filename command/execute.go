@@ -39,8 +39,10 @@ func Execute() error {
 		// TODO
 		return Diff()
 	case "clone":
-		// TODO
-		return Clone()
+		if len(args) < 2 {
+			return fmt.Errorf("Please provide source and destination paths.\nUsage: jit clone <src path> <dest path>")
+		}
+		return Clone(args[0], args[1])
 	default:
 		return fmt.Errorf("Unknown command: %s", command)
 	}

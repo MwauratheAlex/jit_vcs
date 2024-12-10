@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"jit_vcs/config"
 	"os"
@@ -18,7 +19,7 @@ type IndexEntry struct {
 
 type Index []IndexEntry
 
-// AddToIndex adds a file to the staging area
+// AddToIndex adds a file with <path> to the staging area
 func AddToIndex(path string) error {
 	//TODO: check if file is ignored
 
@@ -50,6 +51,7 @@ func AddToIndex(path string) error {
 	return err
 }
 
+// CreateCommit creates a new commit with <message> and <timestamp>
 func CreateCommit(message string, timestamp time.Time) (string, error) {
 	stagedFiles, err := loadIndex()
 	if err != nil {
@@ -97,6 +99,7 @@ func CreateCommit(message string, timestamp time.Time) (string, error) {
 	return commitHash, nil
 }
 
+// CreateBranch creates a new branch with <name>
 func CreateBranch(name string) error {
 	headCommitHash, err := getHEADCommit()
 	if err != nil {
@@ -104,7 +107,111 @@ func CreateBranch(name string) error {
 	}
 	branchRefPath := filepath.Join(config.REPO_DIR, config.REFS_DIR, "heads", name)
 
-	return os.WriteFile(branchRefPath, []byte(headCommitHash), 0644)
+	return os.WriteFile(branchRefPath, []byte(headCommitHash+"\n"), 0644)
+}
+
+// CloneRepo makes a new repo in <dstPath> identical to repo in <srcPath>
+func CloneRepo(srcPath, dstPath string) error {
+	srcRepo := filepath.Join(srcPath, config.REPO_DIR)
+	dstRepo := filepath.Join(dstPath, config.REPO_DIR)
+	if err := CopyDir(srcRepo, dstRepo); err != nil {
+		return fmt.Errorf("failed to copy .jit: %w", err)
+	}
+
+	if err := CheckoutLatestCommit(srcPath, dstPath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CopyDir copies <src> directory to <dst> directory
+func CopyDir(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		fileInfo, err := os.Stat(srcPath)
+		if err != nil {
+			return err
+		}
+		switch {
+		case fileInfo.IsDir():
+			err = CopyDir(srcPath, dstPath)
+			if err != nil {
+				return err
+			}
+		default:
+			err = CopyFile(srcPath, dstPath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// CopyFile copies <src> file to <dst> file
+func CopyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+
+	return err
+}
+
+// TODO: Implement like real world
+
+// 1. find tree for commit hash.
+// 2. recursively extract files from tree and write to working dir
+
+// CheckoutLatestCommit copies all files from srcPath to dstPath, excluding .jit
+func CheckoutLatestCommit(srcPath, dstPath string) error {
+	entries, err := os.ReadDir(srcPath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.Name() == config.REPO_DIR {
+			continue
+		}
+
+		s := filepath.Join(srcPath, entry.Name())
+		d := filepath.Join(dstPath, entry.Name())
+
+		if entry.IsDir() {
+			if err := CopyDir(s, d); err != nil {
+				return err
+			}
+		} else {
+			if err := CopyFile(s, d); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func loadIndex() (*Index, error) {
@@ -133,6 +240,7 @@ func loadIndex() (*Index, error) {
 	return &index, nil
 }
 
+// getHEADCommit returns the <hash> of latest commit
 func getHEADCommit() (string, error) {
 	ref, err := os.ReadFile(filepath.Join(config.REPO_DIR, config.HEAD_PATH))
 	if err != nil {
@@ -156,6 +264,7 @@ func getHEADCommit() (string, error) {
 	return refPath, nil
 }
 
+// updateHEAD changes HEAD to point to <commitHash>
 func updateHEAD(commitHash string) error {
 	headContent, err := os.ReadFile(
 		filepath.Join(config.REPO_DIR, config.HEAD_PATH),
@@ -168,9 +277,9 @@ func updateHEAD(commitHash string) error {
 	if strings.HasPrefix(refLine, "ref:") {
 		refRelPath := strings.TrimSpace(strings.TrimPrefix(refLine, "ref:"))
 		refFilepath := filepath.Join(config.REPO_DIR, refRelPath)
-		return os.WriteFile(refFilepath, []byte(commitHash), 0644)
+		return os.WriteFile(refFilepath, []byte(commitHash+"\n"), 0644)
 	} else {
-		// for jit checkout <commit>, HEAD -> commit
+		// for jit checkout <commithash>, HEAD -> commit
 		return os.WriteFile(
 			filepath.Join(config.REPO_DIR, config.HEAD_PATH),
 			[]byte(commitHash), 0644,
