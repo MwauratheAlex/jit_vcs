@@ -87,7 +87,7 @@ func CreateCommit(message string, timestamp time.Time) (string, error) {
 		return "", err
 	}
 
-	// clear index
+	// clear index - might remove this when tree is implemented fully
 	err = os.WriteFile(filepath.Join(config.REPO_DIR, "index"), []byte(""), 0644)
 
 	if err != nil {
@@ -95,6 +95,16 @@ func CreateCommit(message string, timestamp time.Time) (string, error) {
 	}
 
 	return commitHash, nil
+}
+
+func CreateBranch(name string) error {
+	headCommitHash, err := getHEADCommit()
+	if err != nil {
+		return err
+	}
+	branchRefPath := filepath.Join(config.REPO_DIR, config.REFS_DIR, "heads", name)
+
+	return os.WriteFile(branchRefPath, []byte(headCommitHash), 0644)
 }
 
 func loadIndex() (*Index, error) {

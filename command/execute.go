@@ -28,12 +28,18 @@ func Execute() error {
 	case "log":
 		return Log()
 	case "branch":
-		return Branch()
+		if len(args) < 1 {
+			return fmt.Errorf("Please provide a branch name.\nUsage: jit branch <branch name>")
+		}
+		return Branch(args[0])
 	case "merge":
+		// TODO
 		return Merge()
 	case "diff":
+		// TODO
 		return Diff()
 	case "clone":
+		// TODO
 		return Clone()
 	default:
 		return fmt.Errorf("Unknown command: %s", command)

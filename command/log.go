@@ -3,9 +3,13 @@ package command
 import (
 	"fmt"
 	"jit_vcs/internal"
+	"os"
 	"strings"
+)
 
-	"github.com/fatih/color"
+const (
+	colorYellow = "\033[0;33m"
+	colorNone   = "\033[0m"
 )
 
 func Log() error {
@@ -14,12 +18,15 @@ func Log() error {
 		return err
 	}
 	for _, commit := range commits {
+
+		fmt.Fprintf(os.Stdout, "%sCommit  %s%s\n", colorYellow, commit.Hash, colorNone)
+
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("Date: %s\n", commit.Timestamp))
 		sb.WriteString(fmt.Sprintf("\n\t%s\n", commit.Message))
 
-		color.Yellow(fmt.Sprintf("Commit %s\n", commit.Hash))
-		fmt.Println(sb.String())
+		fmt.Fprintf(os.Stdout, "%s\n", sb.String())
+
 	}
 	return nil
 }
