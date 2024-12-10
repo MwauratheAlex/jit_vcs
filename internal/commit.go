@@ -52,8 +52,8 @@ func (c *Commit) Save() (string, error) {
 	return hash, nil
 }
 
-func LoadCommit(commitHash string) (*Commit, error) {
-	data, err := os.ReadFile(filepath.Join(
+func LoadCommit(repoPath, commitHash string) (*Commit, error) {
+	data, err := os.ReadFile(filepath.Join(repoPath,
 		config.REPO_DIR, config.OBJECTS_DIR, commitHash))
 	if err != nil {
 		return nil, err
@@ -94,13 +94,19 @@ func LoadCommit(commitHash string) (*Commit, error) {
 func GetCommitHistory() ([]Commit, error) {
 	var commits []Commit
 
-	commitHash, err := getHEADCommit()
+	repoPath, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("could not get current working directory: %w", err)
+	}
+
+	commitHash, err := getHEADCommit(repoPath)
 	if err != nil {
 		return nil, err
 	}
 
 	for len(commitHash) > 0 {
-		commit, err := LoadCommit(commitHash)
+
+		commit, err := LoadCommit(repoPath, commitHash)
 
 		if err == nil {
 			commits = append(commits, *commit)

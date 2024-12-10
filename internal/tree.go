@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -72,7 +73,7 @@ func BuildTreeFromFiles(files *Index) (*Tree, error) {
 
 	// sort entries for consistent hashing
 	sort.Slice(blobEntries, func(i, j int) bool {
-		return blobEntries[i].Name < blobEntries[i].Name
+		return blobEntries[i].Name < blobEntries[j].Name
 	})
 
 	// tree data
@@ -99,11 +100,72 @@ func BuildTreeFromFiles(files *Index) (*Tree, error) {
 func (t *Tree) Save() error {
 	var sb strings.Builder
 	for _, e := range t.Entries {
-		sb.WriteString(fmt.Sprintf("%s %s %s\n", e.Mode, e.Type, e.Name))
-		sb.WriteString(fmt.Sprintf("%s\n", e.Hash))
+		sb.WriteString(fmt.Sprintf("%s %s %s %s\n", e.Mode, e.Type, e.Name, e.Hash))
 	}
 	return os.WriteFile(
 		filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, t.Hash),
 		[]byte(sb.String()), 0644,
 	)
+}
+
+func ExtractTree(repoPath, treeHash, dstPath string) error {
+	treePath := filepath.Join(
+		repoPath, config.REPO_DIR, config.OBJECTS_DIR, treeHash)
+	treeContent, err := os.ReadFile(treePath)
+	if err != nil {
+		return fmt.Errorf("failed to read tree object %s: %w", treeHash, err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(treeContent)), "\n")
+	// line: <mode> <type> <name> <hash>
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, " ", 4)
+		if len(parts) != 4 {
+			return fmt.Errorf("malformed tree entry line: %s", line)
+		}
+
+		modeStr, typ, name, hash := parts[0], parts[1], parts[2], parts[3]
+		entryPath := filepath.Join(dstPath, name)
+
+		switch typ {
+		case "tree":
+			if err := os.MkdirAll(entryPath, 0755); err != nil {
+				return fmt.Errorf(
+					"failed to create directory %s: %w", entryPath, err)
+			}
+			if err := ExtractTree(repoPath, hash, entryPath); err != nil {
+				return err
+			}
+		case "blob":
+			blobPath := filepath.Join(
+				repoPath, config.REPO_DIR, config.OBJECTS_DIR, hash)
+			content, err := os.ReadFile(blobPath)
+			if err != nil {
+				return fmt.Errorf("failed to read blob %s: %w", hash, err)
+			}
+			fileMode, err := parseMode(modeStr)
+			if err != nil {
+				return fmt.Errorf("failed to parse mode for %s: %w", entryPath,
+					err)
+			}
+
+			if err := os.WriteFile(entryPath, content, fileMode); err != nil {
+				return fmt.Errorf("failed to write file %s: %w", entryPath, err)
+			}
+		default:
+			return fmt.Errorf("unknown entry type '%s' in tree", typ)
+		}
+	}
+	return nil
+}
+
+func parseMode(modeStr string) (os.FileMode, error) {
+	val, err := strconv.ParseInt(modeStr, 8, 32)
+	if err != nil {
+		return 0, err
+	}
+	return os.FileMode(val), nil
 }

@@ -112,7 +112,11 @@ func CreateCommit(message string, timestamp time.Time) (string, error) {
 		ParentIDs: []string{},
 	}
 
-	headCommit, _ := getHEADCommit()
+	repoPath, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("could not get current working directory: %w", err)
+	}
+	headCommit, _ := getHEADCommit(repoPath)
 	if headCommit != "" {
 		// first commit will not have any parents
 		commit.ParentIDs = append(commit.ParentIDs, headCommit)
@@ -140,7 +144,12 @@ func CreateCommit(message string, timestamp time.Time) (string, error) {
 
 // CreateBranch creates a new branch with <name>
 func CreateBranch(name string) error {
-	headCommitHash, err := getHEADCommit()
+	repoPath, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("could not get current working directory: %w",
+			err)
+	}
+	headCommitHash, err := getHEADCommit(repoPath)
 	if err != nil {
 		return err
 	}
@@ -157,8 +166,8 @@ func CloneRepo(srcPath, dstPath string) error {
 		return fmt.Errorf("failed to copy .jit: %w", err)
 	}
 
-	if err := CheckoutLatestCommit(srcPath, dstPath); err != nil {
-		return err
+	if err := CheckoutLatestCommit(dstPath); err != nil {
+		return fmt.Errorf("failed to checkout latest commit: %w", err)
 	}
 
 	return nil
@@ -226,31 +235,20 @@ func CopyFile(src, dst string) error {
 // 2. recursively extract files from tree and write to working dir
 
 // CheckoutLatestCommit copies all files from srcPath to dstPath, excluding .jit
-func CheckoutLatestCommit(srcPath, dstPath string) error {
-	entries, err := os.ReadDir(srcPath)
+func CheckoutLatestCommit(repoPath string) error {
+	headCommitHash, err := getHEADCommit(repoPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read HEAD: %w", err)
 	}
 
-	for _, entry := range entries {
-		if entry.Name() == config.REPO_DIR {
-			continue
-		}
-
-		s := filepath.Join(srcPath, entry.Name())
-		d := filepath.Join(dstPath, entry.Name())
-
-		if entry.IsDir() {
-			if err := CopyDir(s, d); err != nil {
-				return err
-			}
-		} else {
-			if err := CopyFile(s, d); err != nil {
-				return err
-			}
-		}
+	headCommit, err := LoadCommit(repoPath, headCommitHash)
+	if err != nil {
+		return fmt.Errorf("failed to read commit object %s: %w", headCommitHash, err)
 	}
-	return nil
+
+	treeHash := headCommit.TreeID
+
+	return ExtractTree(repoPath, treeHash, repoPath)
 }
 
 func loadIndex() (*Index, error) {
@@ -289,15 +287,16 @@ func loadIndex() (*Index, error) {
 }
 
 // getHEADCommit returns the <hash> of latest commit
-func getHEADCommit() (string, error) {
-	ref, err := os.ReadFile(filepath.Join(config.REPO_DIR, config.HEAD_PATH))
+func getHEADCommit(repoPath string) (string, error) {
+	ref, err := os.ReadFile(filepath.Join(
+		repoPath, config.REPO_DIR, config.HEAD_PATH))
 	if err != nil {
 		return "", err
 	}
 	refPath := strings.TrimSpace(string(ref))
 	if strings.HasPrefix(refPath, "ref:") {
 		refPath = filepath.Join(
-			config.REPO_DIR,
+			repoPath, config.REPO_DIR,
 			strings.TrimSpace(strings.TrimPrefix(refPath, "ref:")),
 		)
 		// we read the file master to get latest commit
