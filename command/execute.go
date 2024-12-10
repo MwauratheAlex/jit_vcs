@@ -25,6 +25,16 @@ func Execute() error {
 		msg := msgFlag.String("m", "", "Commit message")
 		_ = msgFlag.Parse(args)
 		return Commit(*msg)
+	case "log":
+		return Log()
+	case "branch":
+		return Branch()
+	case "merge":
+		return Merge()
+	case "diff":
+		return Diff()
+	case "clone":
+		return Clone()
 	default:
 		return fmt.Errorf("Unknown command: %s", command)
 	}
