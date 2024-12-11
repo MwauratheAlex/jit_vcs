@@ -28,19 +28,22 @@ func Execute() error {
 	case "log":
 		return Log()
 	case "branch":
-		if len(args) < 1 {
-			return fmt.Errorf(
-				"%sPlease provide a branch name%s.\nUsage: jit branch <branch name>",
-				colorRed, colorNone)
+		if len(args) == 0 {
+			return ListBranches()
+		} else if len(args) == 1 {
+			return Branch(args[0])
 		}
-		return Branch(args[0])
+
+		return fmt.Errorf(
+			"%sPlease provide a branch name%s.\nUsage: jit branch <branch name>",
+			colorRed, colorNone)
 	case "merge":
 		// TODO
 		return Merge()
 	case "diff":
 		if len(args) < 2 {
 			return fmt.Errorf(
-				"%sPlease provide commits hashes to diff.%s\nUsage: jit diff <commit1Hash> <commit2Hash>",
+				"%sPlease provide commits hashes to diff.%s\nUsage: jit diff <oldCommitHash> <newCommitHash>",
 				colorRed, colorNone)
 		}
 

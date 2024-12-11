@@ -154,6 +154,51 @@ func CreateBranch(name string) error {
 	return os.WriteFile(branchRefPath, []byte(headCommitHash+"\n"), 0644)
 }
 
+// ListBranches lists all the branches in the refs/heads
+func ListBranches() error {
+	refsDir := filepath.Join(config.REPO_DIR, config.REFS_DIR, "heads")
+
+	files, err := os.ReadDir(refsDir)
+	if err != nil {
+		return fmt.Errorf("failed to list branches: %w", err)
+	}
+
+	currBranch, err := getCurrentBranch()
+	if err != nil {
+		return fmt.Errorf("failed get current Branch: %w", err)
+	}
+	const (
+		colorGreen = "\033[32m"
+		colorReset = "\033[0m"
+	)
+
+	fmt.Println("Branches:")
+	for _, file := range files {
+		branchName := file.Name()
+		if branchName == currBranch {
+			fmt.Printf("* %s%s%s\n", colorGreen, branchName, colorReset)
+		} else {
+			fmt.Printf("  %s\n", branchName)
+		}
+	}
+	return nil
+}
+
+// getCurrentBranch returns the currentBranch name
+func getCurrentBranch() (string, error) {
+	headPath := filepath.Join(config.REPO_DIR, config.HEAD_PATH)
+	data, err := os.ReadFile(headPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read HEAD: %w", err)
+	}
+	ref := strings.TrimSpace(string(data))
+	if strings.HasPrefix(ref, "ref:") {
+		return filepath.Base(ref), nil
+	}
+
+	return "", fmt.Errorf("HEAD is not pointing to a branch")
+}
+
 // CloneRepo makes a new repo in <dstPath> identical to repo in <srcPath>
 func CloneRepo(srcPath, dstPath string) error {
 	srcRepo := filepath.Join(srcPath, config.REPO_DIR)

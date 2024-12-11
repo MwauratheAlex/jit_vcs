@@ -12,3 +12,10 @@ func Branch(name string) error {
 	fmt.Printf("Created branch '%s'\n", name)
 	return nil
 }
+
+func ListBranches() error {
+	if err := internal.ListBranches(); err != nil {
+		return err
+	}
+	return nil
+}
