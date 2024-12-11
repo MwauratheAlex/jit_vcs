@@ -37,6 +37,13 @@ func Execute() error {
 		return fmt.Errorf(
 			"%sPlease provide a branch name%s.\nUsage: jit branch <branch name>",
 			colorRed, colorNone)
+	case "checkout":
+		if len(args) != 1 {
+			return fmt.Errorf(
+				"%sPlease provide a branch name%s.\nUsage: jit checkout <branch name>",
+				colorRed, colorNone)
+		}
+		return Checkout(args[0])
 	case "merge":
 		// TODO
 		return Merge()

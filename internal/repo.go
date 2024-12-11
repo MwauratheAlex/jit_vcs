@@ -199,6 +199,42 @@ func getCurrentBranch() (string, error) {
 	return "", fmt.Errorf("HEAD is not pointing to a branch")
 }
 
+// CheckoutBranch changes the current Branch to branchName
+func CheckoutBranch(branchName string) error {
+	branchPath := filepath.Join(config.REPO_DIR, config.REFS_DIR, "heads", branchName)
+	branchHash, err := os.ReadFile(branchPath)
+	if err != nil {
+		return fmt.Errorf("branch '%s' does not exist", branchName)
+	}
+
+	commitHash := strings.TrimSpace(string(branchHash))
+
+	headPath := filepath.Join(config.REPO_DIR, config.HEAD_PATH)
+	err = os.WriteFile(headPath, []byte(fmt.Sprintf("ref: refs/heads/%s\n", branchName)), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to update HEAD: %w", err)
+	}
+
+	if commitHash == "" {
+		fmt.Printf("Switched to new branch '%s'\n", branchName)
+		return nil
+	}
+
+	// if branch is not new, we restore the working directory
+	repoPath, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory")
+	}
+
+	// currDir, err := os.Getwd()
+	// if err != nil {
+	// 	return fmt.Errorf("failed to get current directory: %w", err)
+	// }
+	// err = CheckoutLatestCommit(currDir)
+
+	return nil
+}
+
 // CloneRepo makes a new repo in <dstPath> identical to repo in <srcPath>
 func CloneRepo(srcPath, dstPath string) error {
 	srcRepo := filepath.Join(srcPath, config.REPO_DIR)
