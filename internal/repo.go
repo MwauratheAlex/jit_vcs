@@ -3,7 +3,6 @@ package internal
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"jit_vcs/config"
 	"os"
@@ -62,6 +61,10 @@ func AddToIndex(path string) error {
 	if err != nil {
 		return err
 	}
+
+	// convert %0A to newline
+	fixedContent := strings.ReplaceAll(string(content), "%0A", "\n")
+	content = []byte(fixedContent)
 
 	hash := ComputeHash(content)
 
@@ -132,13 +135,6 @@ func CreateCommit(message string, timestamp time.Time) (string, error) {
 		return "", err
 	}
 
-	// clear index - might remove this when tree is implemented fully
-	err = os.WriteFile(filepath.Join(config.REPO_DIR, "index"), []byte(""), 0644)
-
-	if err != nil {
-		return "", err
-	}
-
 	return commitHash, nil
 }
 
@@ -173,68 +169,7 @@ func CloneRepo(srcPath, dstPath string) error {
 	return nil
 }
 
-// CopyDir copies <src> directory to <dst> directory
-func CopyDir(src, dst string) error {
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dst, 0755); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-
-		fileInfo, err := os.Stat(srcPath)
-		if err != nil {
-			return err
-		}
-		switch {
-		case fileInfo.IsDir():
-			err = CopyDir(srcPath, dstPath)
-			if err != nil {
-				return err
-			}
-		default:
-			err = CopyFile(srcPath, dstPath)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// CopyFile copies <src> file to <dst> file
-func CopyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
-	}
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-
-	return err
-}
-
-// TODO: Implement like real world
-
-// 1. find tree for commit hash.
-// 2. recursively extract files from tree and write to working dir
-
-// CheckoutLatestCommit copies all files from srcPath to dstPath, excluding .jit
+// CheckoutLatestCommit recteates the repository in repoPath from .jit
 func CheckoutLatestCommit(repoPath string) error {
 	headCommitHash, err := getHEADCommit(repoPath)
 	if err != nil {

@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mrk21/go-diff-fmt/difffmt"
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 type Commit struct {
@@ -120,4 +123,172 @@ func GetCommitHistory() ([]Commit, error) {
 	}
 
 	return commits, nil
+}
+
+// DiffCommits compares the contents of two commits and
+// Returns a map of filename -> diff text.
+func DiffCommits(hash1, hash2 string) (map[string]string, error) {
+	currDir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	commit1, err := LoadCommit(currDir, hash1)
+	if err != nil {
+		return nil, err
+	}
+	commit2, err := LoadCommit(currDir, hash2)
+	if err != nil {
+		return nil, err
+	}
+
+	treeHash1 := commit1.TreeID
+	treeHash2 := commit2.TreeID
+
+	// filemaps for each tree
+	filesA, err := buildFileMapFromTree(treeHash1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build filemap for commit %s: %w", hash1, err)
+	}
+
+	filesB, err := buildFileMapFromTree(treeHash2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build filemap for commit %s: %w", hash1, err)
+	}
+
+	diff := make(map[string]string)
+
+	// get all unique paths
+	allPaths := make(map[string]struct{})
+	for path := range filesA {
+		allPaths[path] = struct{}{}
+	}
+	for path := range filesB {
+		allPaths[path] = struct{}{}
+	}
+
+	for path := range allPaths {
+		hashA, inA := filesA[path]
+		hashB, inB := filesB[path]
+
+		switch {
+		case inA && !inB:
+			// file was removed
+			oldContent, err := loadBlobContent(hashA)
+			if err != nil {
+				return nil, err
+			}
+			diff[path] = generateUnifiedDiff(path, oldContent, "")
+		case !inA && inB:
+			// file was added
+			newContent, err := loadBlobContent(hashB)
+			if err != nil {
+				return nil, err
+			}
+			diff[path] = generateUnifiedDiff(path, "", newContent)
+		case inA && inB && hashA != hashB:
+			// file modified
+			oldContent, err := loadBlobContent(hashA)
+			if err != nil {
+				return nil, err
+			}
+			newContent, err := loadBlobContent(hashB)
+			if err != nil {
+				return nil, err
+			}
+			d := generateUnifiedDiff(path, oldContent, newContent)
+			if d != "" {
+				diff[path] = d
+			}
+		default:
+			// no change
+		}
+	}
+
+	return diff, nil
+}
+
+// buildFileMapFromTree returns a map of filepath -> blobHash for all files
+// under the given tree
+func buildFileMapFromTree(treeHash string) (map[string]string, error) {
+	result := make(map[string]string)
+	err := walkTree("", treeHash, result)
+	return result, err
+}
+
+// walkTree recursively reads the tree object and populates 'result' with
+// filepath -> blobHash
+func walkTree(prefix, treeHash string, result map[string]string) error {
+	treePath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, treeHash)
+	data, err := os.ReadFile(treePath)
+	if err != nil {
+		return fmt.Errorf("failed to read tree object %s: %w", treeHash, err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, " ", 4)
+		if len(parts) != 4 {
+			return fmt.Errorf("malformed tree entry line: %s", line)
+		}
+
+		// mod := parts[0]
+		typ := parts[1]
+		name := parts[2]
+		hash := parts[3]
+
+		fullPath := name
+		if prefix == "" {
+			fullPath = prefix + "/" + name
+		}
+
+		switch typ {
+		case "tree":
+			if err := walkTree(fullPath, hash, result); err != nil {
+				return err
+			}
+		case "blob":
+			result[fullPath] = hash
+		default:
+			return fmt.Errorf("unknown type %s in tree %s", typ, treeHash)
+		}
+	}
+	return nil
+}
+
+// loadBlobContent reads blob content from object store
+func loadBlobContent(blobHash string) (string, error) {
+	blobPath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, blobHash)
+	data, err := os.ReadFile(blobPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read blob %s: %w", blobHash, err)
+	}
+	return string(data), nil
+	// return blobPath, nil
+}
+
+func generateUnifiedDiff(filename, oldContentPath, newContentPath string) string {
+	// compute line mode diffing
+	dmp := diffmatchpatch.New()
+	runes1, runes2, lineArray := dmp.DiffLinesToRunes(oldContentPath, newContentPath)
+	diffs := dmp.DiffMainRunes(runes1, runes2, false)
+	diffs = dmp.DiffCharsToLines(diffs, lineArray)
+
+	// format []diffmatchpatch.Diff to Unified format
+	lineDiffs := difffmt.MakeLineDiffsFromDMP(diffs)
+	hunks := difffmt.MakeHunks(lineDiffs, 3)
+	unifiedFmt := difffmt.NewUnifiedFormat(difffmt.UnifiedFormatOption{
+		ColorMode: difffmt.ColorTerminalOnly,
+	})
+
+	unified := unifiedFmt.Sprint(
+		&difffmt.DiffTarget{Path: filename},
+		&difffmt.DiffTarget{Path: filename},
+		hunks,
+	)
+
+	return unified
 }

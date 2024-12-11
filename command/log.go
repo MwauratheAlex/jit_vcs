@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	colorRed    = "\033[0;31m"
 	colorYellow = "\033[0;33m"
 	colorNone   = "\033[0m"
 )

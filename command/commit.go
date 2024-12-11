@@ -9,7 +9,9 @@ import (
 func Commit(message string) error {
 	if message == "" {
 		return fmt.Errorf(
-			"Commit message is missing.\nUsage: jit commit -m 'commit message'")
+			"%sCommit message is missing.%s\nUsage: jit commit -m 'commit message'",
+			colorRed, colorNone,
+		)
 	}
 
 	commitID, err := internal.CreateCommit(message, time.Now())

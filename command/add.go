@@ -8,7 +8,9 @@ import (
 func Add(paths []string) error {
 
 	if len(paths) < 1 {
-		return fmt.Errorf("No file specified.\nUsage: jit add <file>")
+		return fmt.Errorf("%sNo file specified.%s\nUsage: jit add <file>",
+			colorRed, colorNone,
+		)
 	}
 
 	// TODO: Make this concurrent

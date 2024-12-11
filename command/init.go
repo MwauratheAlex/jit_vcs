@@ -9,7 +9,7 @@ import (
 
 func Init(args []string) error {
 	if len(args) > 0 {
-		return fmt.Errorf("Usage: jit init")
+		return fmt.Errorf("%sToo many arguements.%s\nUsage: jit init", colorRed, colorNone)
 	}
 
 	if _, err := os.Stat(config.REPO_DIR); err == nil {
