@@ -191,14 +191,9 @@ func updateIndexFromTree(treeHash string) error {
 
 	var index Index
 	for _, entry := range tree.Entries {
-		mode, err := parseMode(entry.Mode)
-		if err != nil {
-			return err
-		}
 		index = append(index, IndexEntry{
 			Filepath: entry.Name,
 			Hash:     entry.Hash,
-			Mode:     mode,
 		})
 	}
 
@@ -280,19 +275,30 @@ func updateWorkingDirectoryFromTrees(currentTree, targetTree *Tree) error {
 
 	for _, entry := range targetTree.Entries {
 		path := filepath.Join(".", entry.Name)
-		if entry.Type == "tree" {
-			err := os.MkdirAll(path, 0755)
-			if err != nil {
-				return fmt.Errorf("failed to create directory '%s': %w", path, err)
-			}
-			err = ExtractTree(".", entry.Hash, ".")
-			if err != nil {
-				return fmt.Errorf("failed to extract directory '%s': %w", path, err)
+		if currentEntry, exists := currEntries[entry.Name]; exists {
+			// file exists in both trees, check if it needs updating
+			if currentEntry.Hash != entry.Hash {
+				err := extractBlob(entry.Hash, path)
+				if err != nil {
+					return fmt.Errorf("failed to update file '%s': %w", path, err)
+				}
 			}
 		} else {
-			err := extractBlob(&entry, path)
-			if err != nil {
-				return fmt.Errorf("failed to create file '%s': %w", path, err)
+			// file or dir does not exist, create it
+			if entry.Type == "tree" {
+				err := os.MkdirAll(path, 0755)
+				if err != nil {
+					return fmt.Errorf("failed to create directory '%s': %w", path, err)
+				}
+				err = ExtractTree(".", entry.Hash, ".")
+				if err != nil {
+					return fmt.Errorf("failed to extract directory '%s': %w", path, err)
+				}
+			} else {
+				err := extractBlob(entry.Hash, path)
+				if err != nil {
+					return fmt.Errorf("failed to create file '%s': %w", path, err)
+				}
 			}
 		}
 	}
@@ -300,11 +306,11 @@ func updateWorkingDirectoryFromTrees(currentTree, targetTree *Tree) error {
 }
 
 // extractBlob writes blob with hash to path
-func extractBlob(treeEntry *TreeEntry, path string) error {
-	blobPath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, treeEntry.Hash)
+func extractBlob(hash, path string) error {
+	blobPath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, hash)
 	content, err := os.ReadFile(blobPath)
 	if err != nil {
-		return fmt.Errorf("failed to read blob '%s': %w", treeEntry.Hash, err)
+		return fmt.Errorf("failed to read blob '%s': %w", hash, err)
 	}
 
 	err = os.WriteFile(path, content, 0644)
@@ -312,12 +318,7 @@ func extractBlob(treeEntry *TreeEntry, path string) error {
 		return fmt.Errorf("failed to write file '%s': %w", path, err)
 	}
 
-	mode, err := parseMode(treeEntry.Mode)
-	if err != nil {
-		return err
-	}
-
-	return os.Chmod(path, mode)
+	return nil
 }
 
 // hasChanges compares headTreeHash, IndexTreeHash, and workingDirHash
@@ -339,10 +340,20 @@ func hasChanges() (bool, error) {
 		return false, fmt.Errorf("failed to build Index Tree")
 	}
 
-	workingTree, err := buildWorkingDirectoryTree(".")
+	fakeWorkingIdx, err := CreateFakeIndex(".")
 	if err != nil {
-		return false, fmt.Errorf("failed to build working directory tree")
+		return false, err
 	}
+
+	// workingTree, err := buildWorkingDirectoryTree(".")
+	// if err != nil {
+	// 	return false, fmt.Errorf("failed to build working directory tree")
+	// }
+	workingTree, err := BuildTreeFromIndex(fakeWorkingIdx)
+	if err != nil {
+		return false, err
+	}
+
 	headCommit, err := LoadCommit(".", currHeadHash)
 	if err != nil {
 		return false, fmt.Errorf("failed to load HEAD Commit")
@@ -355,13 +366,16 @@ func hasChanges() (bool, error) {
 
 	fmt.Println()
 	fmt.Println("idxTree")
+	fmt.Println(idxTree.Hash)
 	printTree(idxTree)
 	fmt.Println()
 	fmt.Println("workingTree")
+	fmt.Println(workingTree.Hash)
 	printTree(workingTree)
 	fmt.Println()
 	fmt.Println("currTree")
 	currTree, err := loadTree(headCommit.TreeID)
+	fmt.Println(currTree.Hash)
 	printTree(currTree)
 
 	return (hasUncommittedChange || hasUnstagedChanges), nil
@@ -369,7 +383,7 @@ func hasChanges() (bool, error) {
 
 func printTree(tree *Tree) {
 	for _, entry := range tree.Entries {
-		fmt.Printf("Name: %s Type: %s, Mode: %s, Hash: %s\n", entry.Name, entry.Type, entry.Mode, entry.Hash)
+		fmt.Printf("Name: %s Type: %s, Hash: %s\n", entry.Name, entry.Type, entry.Hash)
 	}
 }
 

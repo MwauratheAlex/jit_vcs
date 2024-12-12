@@ -238,15 +238,14 @@ func walkTree(prefix, treeHash string, result map[string]string) error {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, " ", 4)
-		if len(parts) != 4 {
+		parts := strings.SplitN(line, " ", 3)
+		if len(parts) != 3 {
 			return fmt.Errorf("malformed tree entry line: %s", line)
 		}
 
-		// mod := parts[0]
-		typ := parts[1]
-		name := parts[2]
-		hash := parts[3]
+		typ := parts[0]
+		name := parts[1]
+		hash := parts[2]
 
 		fullPath := name
 		if prefix == "" {

@@ -8,12 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
 type TreeEntry struct {
-	Mode string // filemode. eg. 0644, 0755, 040000
 	Type string // blob or tree
 	Name string
 	Hash string // hash of blob or subtree
@@ -39,7 +37,6 @@ func BuildTreeFromIndex(files *Index) (*Tree, error) {
 		if len(parts) == 1 {
 			// in root
 			blobEntries = append(blobEntries, TreeEntry{
-				Mode: fmt.Sprintf("%04o", f.Mode.Perm()),
 				Type: "blob",
 				Name: parts[0],
 				Hash: f.Hash,
@@ -52,7 +49,6 @@ func BuildTreeFromIndex(files *Index) (*Tree, error) {
 			rootEntriesMap[dirName] = append(rootEntriesMap[dirName], IndexEntry{
 				Filepath: remainingPath,
 				Hash:     f.Hash,
-				Mode:     f.Mode,
 			})
 		}
 	}
@@ -65,7 +61,6 @@ func BuildTreeFromIndex(files *Index) (*Tree, error) {
 			return nil, err
 		}
 		blobEntries = append(blobEntries, TreeEntry{
-			Mode: "040000", // dir
 			Type: "tree",
 			Name: dirName,
 			Hash: subTree.Hash,
@@ -80,9 +75,12 @@ func BuildTreeFromIndex(files *Index) (*Tree, error) {
 	// tree data
 	var buf bytes.Buffer
 	for _, e := range blobEntries {
-		fmt.Fprintf(&buf, "%s %s %s\n", e.Mode, e.Type, e.Name)
+		fmt.Fprintf(&buf, "%s %s %s\n", e.Type, e.Name, e.Hash)
 	}
 
+	fmt.Println("Hashing tree")
+	fmt.Println(buf.String())
+	fmt.Println()
 	treeHash := ComputeHash(buf.Bytes())
 
 	t := &Tree{
@@ -97,7 +95,7 @@ func BuildTreeFromIndex(files *Index) (*Tree, error) {
 func (t *Tree) Save() error {
 	var sb strings.Builder
 	for _, e := range t.Entries {
-		sb.WriteString(fmt.Sprintf("%s %s %s %s\n", e.Mode, e.Type, e.Name, e.Hash))
+		sb.WriteString(fmt.Sprintf("%s %s %s\n", e.Type, e.Name, e.Hash))
 	}
 	return os.WriteFile(
 		filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, t.Hash),
@@ -123,15 +121,14 @@ func loadTree(treeHash string) (*Tree, error) {
 	var entries []TreeEntry
 	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
 	for _, line := range lines {
-		parts := strings.SplitN(line, " ", 4)
-		if len(parts) != 4 {
+		parts := strings.SplitN(line, " ", 3)
+		if len(parts) != 3 {
 			return nil, fmt.Errorf("malformed tree entry: '%s'", line)
 		}
 		entries = append(entries, TreeEntry{
-			Mode: parts[0],
-			Type: parts[1],
-			Name: parts[2],
-			Hash: parts[3],
+			Type: parts[0],
+			Name: parts[1],
+			Hash: parts[2],
 		})
 	}
 
@@ -173,7 +170,6 @@ func buildWorkingDirectoryTree(basePath string) (*Tree, error) {
 				return err
 			}
 			entries = append(entries, TreeEntry{
-				Mode: "040000",
 				Type: "tree",
 				Name: relPath,
 				Hash: subTree.Hash,
@@ -187,7 +183,6 @@ func buildWorkingDirectoryTree(basePath string) (*Tree, error) {
 			hash := ComputeHash(content)
 
 			entries = append(entries, TreeEntry{
-				Mode: fmt.Sprintf("%04o", info.Mode().Perm()),
 				Type: "blob",
 				Name: relPath,
 				Hash: hash,
@@ -207,7 +202,7 @@ func buildWorkingDirectoryTree(basePath string) (*Tree, error) {
 
 	var buf bytes.Buffer
 	for _, e := range entries {
-		fmt.Fprintf(&buf, "%s %s %s\n", e.Mode, e.Type, e.Name)
+		fmt.Fprintf(&buf, "%s %s\n", e.Type, e.Name)
 	}
 
 	treeHash := ComputeHash(buf.Bytes())
@@ -227,17 +222,17 @@ func ExtractTree(repoPath, treeHash, dstPath string) error {
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(treeContent)), "\n")
-	// line: <mode> <type> <name> <hash>
+	// line: <type> <name> <hash>
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, " ", 4)
-		if len(parts) != 4 {
+		parts := strings.SplitN(line, " ", 3)
+		if len(parts) != 3 {
 			return fmt.Errorf("malformed tree entry line: %s", line)
 		}
 
-		modeStr, typ, name, hash := parts[0], parts[1], parts[2], parts[3]
+		typ, name, hash := parts[0], parts[1], parts[2]
 		entryPath := filepath.Join(dstPath, name)
 
 		switch typ {
@@ -256,14 +251,8 @@ func ExtractTree(repoPath, treeHash, dstPath string) error {
 			if err != nil {
 				return fmt.Errorf("failed to read blob %s: %w", hash, err)
 			}
-			fileMode, err := parseMode(modeStr)
-			fmt.Println(fileMode)
-			if err != nil {
-				return fmt.Errorf("failed to parse mode for %s: %w", entryPath,
-					err)
-			}
 
-			if err := os.WriteFile(entryPath, content, fileMode); err != nil {
+			if err := os.WriteFile(entryPath, content, 0644); err != nil {
 				return fmt.Errorf("failed to write file %s: %w", entryPath, err)
 			}
 		default:
@@ -271,12 +260,4 @@ func ExtractTree(repoPath, treeHash, dstPath string) error {
 		}
 	}
 	return nil
-}
-
-func parseMode(modeStr string) (os.FileMode, error) {
-	val, err := strconv.ParseInt(modeStr, 8, 32)
-	if err != nil {
-		return 0, err
-	}
-	return os.FileMode(val), nil
 }
