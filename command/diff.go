@@ -2,7 +2,7 @@ package command
 
 import (
 	"fmt"
-	"jit_vcs/internal"
+	"jit/internal"
 )
 
 func Diff(commitHash1, commitHash2 string) error {

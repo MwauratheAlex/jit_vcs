@@ -3,7 +3,7 @@ package command
 import (
 	"crypto/sha1"
 	"fmt"
-	"jit_vcs/config"
+	"jit/config"
 	"os"
 	"path/filepath"
 	"testing"

@@ -3,7 +3,8 @@ package internal
 import (
 	"bytes"
 	"fmt"
-	"jit_vcs/config"
+	"io/fs"
+	"jit/config"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,10 +24,10 @@ type Tree struct {
 	Entries []TreeEntry
 }
 
-// BuildTreeFromFiles builds a tree from index of tree.
+// BuildTreeFromIndex builds a tree from Index files.
 // Recurisively constructs subtrees for directories
 // Returns top-level tree object
-func BuildTreeFromFiles(files *Index) (*Tree, error) {
+func BuildTreeFromIndex(files *Index) (*Tree, error) {
 	// group Entries by parent directory
 	rootEntriesMap := make(map[string][]IndexEntry)
 	blobEntries := []TreeEntry{}
@@ -59,7 +60,7 @@ func BuildTreeFromFiles(files *Index) (*Tree, error) {
 	// build subtree for each directory
 	for dirName, dirFiles := range rootEntriesMap {
 		subIndex := Index(dirFiles)
-		subTree, err := BuildTreeFromFiles(&subIndex)
+		subTree, err := BuildTreeFromIndex(&subIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -89,10 +90,6 @@ func BuildTreeFromFiles(files *Index) (*Tree, error) {
 		Entries: blobEntries,
 	}
 
-	if err := t.Save(); err != nil {
-		return nil, err
-	}
-
 	return t, nil
 }
 
@@ -106,6 +103,119 @@ func (t *Tree) Save() error {
 		filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, t.Hash),
 		[]byte(sb.String()), 0644,
 	)
+}
+
+var t *Tree = nil
+
+// loadTree returns a tree with <treeHash>
+// caches because trees are immutable
+func loadTree(treeHash string) (*Tree, error) {
+	if t != nil && t.Hash == treeHash {
+		return t, nil
+	}
+
+	treePath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, treeHash)
+	content, err := os.ReadFile(treePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tree '%s': %w", treeHash, err)
+	}
+
+	var entries []TreeEntry
+	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+	for _, line := range lines {
+		parts := strings.SplitN(line, " ", 4)
+		if len(parts) != 4 {
+			return nil, fmt.Errorf("malformed tree entry: '%s'", line)
+		}
+		entries = append(entries, TreeEntry{
+			Mode: parts[0],
+			Type: parts[1],
+			Name: parts[2],
+			Hash: parts[3],
+		})
+	}
+
+	t = &Tree{
+		Hash:    treeHash,
+		Entries: entries,
+	}
+
+	return t, nil
+}
+
+// buildWorkingDirectoryTree returns a Tree object representing the current working directory
+func buildWorkingDirectoryTree(basePath string) (*Tree, error) {
+	var entries []TreeEntry
+
+	err := filepath.Walk(basePath, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(path, config.REPO_DIR) {
+			return nil
+		}
+
+		if path == basePath {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(basePath, path)
+		if err != nil {
+			return err
+		}
+
+		relPath = filepath.ToSlash(relPath)
+
+		if info.IsDir() {
+			// subtree for directories
+			subTree, err := buildWorkingDirectoryTree(path)
+			if err != nil {
+				return err
+			}
+			entries = append(entries, TreeEntry{
+				Mode: "040000",
+				Type: "tree",
+				Name: relPath,
+				Hash: subTree.Hash,
+			})
+		} else {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			hash := ComputeHash(content)
+
+			entries = append(entries, TreeEntry{
+				Mode: fmt.Sprintf("%04o", info.Mode().Perm()),
+				Type: "blob",
+				Name: relPath,
+				Hash: hash,
+			})
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// sort for consistent hashing
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
+
+	var buf bytes.Buffer
+	for _, e := range entries {
+		fmt.Fprintf(&buf, "%s %s %s\n", e.Mode, e.Type, e.Name)
+	}
+
+	treeHash := ComputeHash(buf.Bytes())
+
+	return &Tree{
+		Hash:    treeHash,
+		Entries: entries,
+	}, nil
 }
 
 func ExtractTree(repoPath, treeHash, dstPath string) error {

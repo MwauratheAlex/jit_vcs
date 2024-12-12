@@ -2,7 +2,7 @@ package internal
 
 import (
 	"fmt"
-	"jit_vcs/config"
+	"jit/config"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -55,7 +55,16 @@ func (c *Commit) Save() (string, error) {
 	return hash, nil
 }
 
+var c *Commit = nil
+
+// LoadCommit returns the commit with the given <commitHash>
+// caches because commits are immutable
 func LoadCommit(repoPath, commitHash string) (*Commit, error) {
+	if c != nil && c.Hash == commitHash {
+		return c, nil
+	}
+	c = &Commit{}
+
 	data, err := os.ReadFile(filepath.Join(repoPath,
 		config.REPO_DIR, config.OBJECTS_DIR, commitHash))
 	if err != nil {
@@ -63,7 +72,6 @@ func LoadCommit(repoPath, commitHash string) (*Commit, error) {
 	}
 
 	lines := strings.Split(string(data), "\n")
-	var c Commit
 	var i int
 	for ; i < len(lines); i++ {
 		line := lines[i]
@@ -91,7 +99,7 @@ func LoadCommit(repoPath, commitHash string) (*Commit, error) {
 	}
 	c.Hash = commitHash
 
-	return &c, err
+	return c, err
 }
 
 func GetCommitHistory() ([]Commit, error) {

@@ -1,7 +1,7 @@
 package command
 
 import (
-	"jit_vcs/internal"
+	"jit/internal"
 )
 
 func Branch(name string) error {

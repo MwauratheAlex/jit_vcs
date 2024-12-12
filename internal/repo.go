@@ -4,94 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"jit_vcs/config"
+	"jit/config"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
-
-type IndexEntry struct {
-	Hash     string
-	Filepath string
-	Mode     os.FileMode
-}
-
-type Index []IndexEntry
-
-// AddToIndex adds a file with <path> to the staging area
-func AddToIndex(path string) error {
-	//TODO: check if file is ignored
-
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-
-	info, err := os.Stat(absPath)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		// walk
-		return filepath.Walk(
-			absPath,
-			func(filePath string, fileInfo fs.FileInfo, walkErr error) error {
-				if walkErr != nil {
-					return walkErr
-				}
-				// skip dirs, process only their files
-				if fileInfo.IsDir() {
-					return nil
-				}
-
-				// add files to index
-				_, err := filepath.Rel(absPath, filePath)
-				if err != nil {
-					return err
-				}
-				return AddToIndex(filePath)
-			})
-	}
-
-	// handle files
-	content, err := os.ReadFile(absPath)
-	if err != nil {
-		return err
-	}
-
-	// convert %0A to newline
-	fixedContent := strings.ReplaceAll(string(content), "%0A", "\n")
-	content = []byte(fixedContent)
-
-	hash := ComputeHash(content)
-
-	// write obj to if does not exist
-	objectPath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, hash)
-	if _, err := os.Stat(objectPath); err != nil {
-		if err := os.WriteFile(objectPath, content, 0644); err != nil {
-			return err
-		}
-	}
-
-	// write to index
-	indexPath := filepath.Join(config.REPO_DIR, "index")
-	mode := fmt.Sprintf("%04o", info.Mode().Perm())
-
-	indexEntry := fmt.Sprintf("%s %s %s\n", hash, mode, path)
-
-	f, err := os.OpenFile(indexPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.WriteString(indexEntry)
-
-	return err
-}
 
 // CreateCommit creates a new commit with <message> and <timestamp>
 func CreateCommit(message string, timestamp time.Time) (string, error) {
@@ -103,7 +21,11 @@ func CreateCommit(message string, timestamp time.Time) (string, error) {
 		return "", errors.New("no files staged")
 	}
 
-	tree, err := BuildTreeFromFiles(stagedFiles)
+	tree, err := BuildTreeFromIndex(stagedFiles)
+	if err != nil {
+		return "", err
+	}
+	err = tree.Save()
 	if err != nil {
 		return "", err
 	}
@@ -130,7 +52,7 @@ func CreateCommit(message string, timestamp time.Time) (string, error) {
 		return "", err
 	}
 
-	err = updateHEAD(commitHash)
+	err = updateHEADCommitHash(commitHash)
 	if err != nil {
 		return "", err
 	}
@@ -202,37 +124,270 @@ func getCurrentBranch() (string, error) {
 // CheckoutBranch changes the current Branch to branchName
 func CheckoutBranch(branchName string) error {
 	branchPath := filepath.Join(config.REPO_DIR, config.REFS_DIR, "heads", branchName)
-	branchHash, err := os.ReadFile(branchPath)
+	branchHashBytes, err := os.ReadFile(branchPath)
 	if err != nil {
 		return fmt.Errorf("branch '%s' does not exist", branchName)
 	}
 
-	commitHash := strings.TrimSpace(string(branchHash))
+	branchHash := strings.TrimSpace(string(branchHashBytes))
+	currDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+	currHeadHash, err := getHEADCommit(currDir)
+	if err != nil {
+		return fmt.Errorf("failed to get current HEAD commit: %w", err)
+	}
 
-	headPath := filepath.Join(config.REPO_DIR, config.HEAD_PATH)
-	err = os.WriteFile(headPath, []byte(fmt.Sprintf("ref: refs/heads/%s\n", branchName)), 0644)
+	// unstaged and uncommitted changes
+	hasChanges, err := hasChanges()
+	if err != nil {
+		return fmt.Errorf("failed to check for uncommitted changes: %w", err)
+	}
+
+	if hasChanges {
+		return fmt.Errorf(
+			"cannot switch branch: unstaged or uncommitted changes. Please commit your changes before switching branches.")
+	}
+
+	// switching to same commit, just update HEAD
+	if branchHash == currHeadHash {
+		if err := changeHEAD(branchName); err != nil {
+			return fmt.Errorf("failed to update HEAD: %w", err)
+		}
+		return nil
+	}
+
+	// update index to match target branch
+	targetCommit, err := LoadCommit(".", branchHash)
+	if err != nil {
+		return fmt.Errorf("failed to load target branch commit: %w", err)
+	}
+
+	err = updateIndexFromTree(targetCommit.TreeID)
+	if err != nil {
+		return fmt.Errorf("failed to update index: %w", err)
+	}
+
+	err = rebuildWorkingDirectory(currHeadHash, branchHash)
+	if err != nil {
+		return fmt.Errorf("failed to rebuild working directory: %w", err)
+	}
+
+	// update HEAD to point to new branch
+	err = changeHEAD(branchName)
 	if err != nil {
 		return fmt.Errorf("failed to update HEAD: %w", err)
 	}
 
-	if commitHash == "" {
-		fmt.Printf("Switched to new branch '%s'\n", branchName)
-		return nil
-	}
+	return nil
+}
 
-	// if branch is not new, we restore the working directory
-	repoPath, err := os.Getwd()
+func updateIndexFromTree(treeHash string) error {
+	tree, err := loadTree(treeHash)
 	if err != nil {
-		return fmt.Errorf("failed to get current directory")
+		return fmt.Errorf("failed to load tree: %w", err)
 	}
 
-	// currDir, err := os.Getwd()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to get current directory: %w", err)
-	// }
-	// err = CheckoutLatestCommit(currDir)
+	var index Index
+	for _, entry := range tree.Entries {
+		mode, err := parseMode(entry.Mode)
+		if err != nil {
+			return err
+		}
+		index = append(index, IndexEntry{
+			Filepath: entry.Name,
+			Hash:     entry.Hash,
+			Mode:     mode,
+		})
+	}
+
+	err = saveIndex(&index)
+	if err != nil {
+		return fmt.Errorf("failed to save index: %w", err)
+	}
 
 	return nil
+}
+
+func rebuildWorkingDirectory(currentCommitHash, targetCommitHash string) error {
+	currCommit, err := LoadCommit(".", currentCommitHash)
+	if err != nil {
+		return fmt.Errorf(
+			"Error loading current commit '%s': %w", currentCommitHash, err)
+	}
+	targetCommit, err := LoadCommit(".", targetCommitHash)
+	if err != nil {
+		return fmt.Errorf(
+			"Error loading target commit '%s': %w", targetCommitHash, err)
+	}
+
+	currTreeHash := currCommit.TreeID
+	targetTreeHash := targetCommit.TreeID
+
+	currTree, err := loadTree(currTreeHash)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to load current tree %s: %w", currTreeHash, err)
+	}
+	targetTree, err := loadTree(targetTreeHash)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to load target tree %s: %w", targetTreeHash, err)
+	}
+
+	err = updateWorkingDirectoryFromTrees(currTree, targetTree)
+	if err != nil {
+		return fmt.Errorf("failed to update working directory: %w", err)
+	}
+	return nil
+}
+
+func updateWorkingDirectoryFromTrees(currentTree, targetTree *Tree) error {
+	// map for easy lookup
+	targetEntries := make(map[string]TreeEntry)
+	for _, entry := range targetTree.Entries {
+		targetEntries[entry.Name] = entry
+	}
+
+	// handle files in curr tree but not in target tree (delete)
+	for _, entry := range currentTree.Entries {
+		if _, exists := targetEntries[entry.Name]; !exists {
+			path := filepath.Join(".", entry.Name)
+			if entry.Type == "tree" {
+				err := os.RemoveAll(path)
+				if err != nil {
+					return fmt.Errorf("failed to remove directory '%s': %w", path, err)
+				}
+			} else {
+				err := os.Remove(path)
+				if err != nil {
+					return fmt.Errorf("failed to remove file '%s': %w", path, err)
+				}
+			}
+		}
+	}
+
+	// handle files in target tree (create or update)
+	currEntries := make(map[string]TreeEntry)
+	for _, entry := range currentTree.Entries {
+		currEntries[entry.Name] = entry
+	}
+
+	for _, entry := range targetTree.Entries {
+		path := filepath.Join(".", entry.Name)
+		if currentEntry, exists := currEntries[entry.Name]; exists {
+			// file exists in both trees, check if it needs updating
+			if currentEntry.Hash != entry.Hash {
+				err := extractBlob(entry.Hash, path)
+				if err != nil {
+					return fmt.Errorf("failed to update file '%s': %w", path, err)
+				}
+			}
+		} else {
+			// file or dir does not exist, create it
+			if entry.Type == "tree" {
+				err := os.MkdirAll(path, 0755)
+				if err != nil {
+					return fmt.Errorf("failed to create directory '%s': %w", path, err)
+				}
+				err = ExtractTree(".", entry.Hash, ".")
+				if err != nil {
+					return fmt.Errorf("failed to extract directory '%s': %w", path, err)
+				}
+			} else {
+				err := extractBlob(entry.Hash, path)
+				if err != nil {
+					return fmt.Errorf("failed to create file '%s': %w", path, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// extractBlob writes blob with hash to path
+func extractBlob(hash, path string) error {
+	blobPath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, hash)
+	content, err := os.ReadFile(blobPath)
+	if err != nil {
+		return fmt.Errorf("failed to read blob '%s': %w", hash, err)
+	}
+
+	err = os.WriteFile(path, content, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write file '%s': %w", path, err)
+	}
+
+	return nil
+}
+
+// hasChanges compares headTreeHash, IndexTreeHash, and workingDirHash
+// to detect uncommitted  or untracked changes
+func hasChanges() (bool, error) {
+	currHeadHash, err := getHEADCommit(".")
+	if err != nil {
+		return false, fmt.Errorf("failed to get HEAD commit: %w", err)
+	}
+
+	stagedFiles, err := loadIndex()
+	if err != nil {
+		return false, fmt.Errorf("failed to load Index: %w", err)
+	}
+
+	// tree in index
+	idxTree, err := BuildTreeFromIndex(stagedFiles)
+	if err != nil {
+		return false, fmt.Errorf("failed to build Index Tree")
+	}
+
+	workingTree, err := buildWorkingDirectoryTree(".")
+	if err != nil {
+		return false, fmt.Errorf("failed to build working directory tree")
+	}
+	headCommit, err := LoadCommit(".", currHeadHash)
+	if err != nil {
+		return false, fmt.Errorf("failed to load HEAD Commit")
+	}
+
+	hasUnstagedChanges := idxTree.Hash != workingTree.Hash
+	hasUncommittedChange := idxTree.Hash != headCommit.TreeID
+	fmt.Println("hasUnstagedChanges: ", hasUnstagedChanges)
+	fmt.Println("hasUncommittedChange: ", hasUncommittedChange)
+
+	return (hasUncommittedChange || hasUnstagedChanges), nil
+}
+
+func printTree(tree *Tree) {
+	for _, entry := range tree.Entries {
+		fmt.Printf("Name: %s Type: %s, Mode: %s, Hash: %s\n", entry.Name, entry.Type, entry.Mode, entry.Hash)
+	}
+}
+
+func updateWorkingDirectory(commitHash string) error {
+	currDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("Error getting current directory: %w", err)
+	}
+
+	commit, err := LoadCommit(currDir, commitHash)
+	if err != nil {
+		return fmt.Errorf("failed to read commit object: %w", err)
+	}
+
+	treeHash := commit.TreeID
+
+	err = ExtractTree(currDir, treeHash, currDir)
+	if err != nil {
+		return fmt.Errorf("failed to extract tree: %w", err)
+	}
+
+	return nil
+}
+
+func changeHEAD(branchName string) error {
+	headPath := filepath.Join(config.REPO_DIR, config.HEAD_PATH)
+	return os.WriteFile(headPath, []byte(fmt.Sprintf("ref: refs/heads/%s\n", branchName)), 0644)
 }
 
 // CloneRepo makes a new repo in <dstPath> identical to repo in <srcPath>
@@ -267,41 +422,6 @@ func CheckoutLatestCommit(repoPath string) error {
 	return ExtractTree(repoPath, treeHash, repoPath)
 }
 
-func loadIndex() (*Index, error) {
-	var index Index
-
-	data, err := os.ReadFile(filepath.Join(config.REPO_DIR, "index"))
-	if err != nil {
-		return nil, err
-	}
-
-	lines := strings.Split(string(data), "\n")
-	for _, l := range lines {
-		l = strings.TrimSpace(l)
-		if l != "" {
-			idxEntries := strings.Split(l, " ")
-			if len(idxEntries) < 3 {
-				continue
-			}
-			modeUint, err := strconv.ParseUint(idxEntries[1], 8, 32)
-			if err != nil {
-				return nil, fmt.Errorf("invalid mode in index: %s", idxEntries[1])
-			}
-			mode := os.FileMode(modeUint)
-			idxEntry := IndexEntry{
-				Hash:     idxEntries[0],
-				Mode:     mode,
-				Filepath: idxEntries[2],
-			}
-
-			index = append(index, idxEntry)
-		}
-
-	}
-
-	return &index, nil
-}
-
 // getHEADCommit returns the <hash> of latest commit
 func getHEADCommit(repoPath string) (string, error) {
 	ref, err := os.ReadFile(filepath.Join(
@@ -318,7 +438,10 @@ func getHEADCommit(repoPath string) (string, error) {
 		// we read the file master to get latest commit
 		hash, err := os.ReadFile(refPath)
 		if err != nil {
-			// here master is empty, e.g. after init
+			// we cannot create a branch if master does not exist
+			if errors.Is(err, fs.ErrNotExist) {
+				return "", fmt.Errorf("fatal: no valid object named 'master'")
+			}
 			return "", err
 		}
 		// else it has the hash of the latest commit
@@ -328,7 +451,7 @@ func getHEADCommit(repoPath string) (string, error) {
 }
 
 // updateHEAD changes HEAD to point to <commitHash>
-func updateHEAD(commitHash string) error {
+func updateHEADCommitHash(commitHash string) error {
 	headContent, err := os.ReadFile(
 		filepath.Join(config.REPO_DIR, config.HEAD_PATH),
 	)

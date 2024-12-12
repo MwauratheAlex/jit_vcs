@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"jit_vcs/config"
+	"jit/config"
 	"os"
 	"path/filepath"
 	"testing"

@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"jit_vcs/command"
+	"jit/command"
 	"os"
 )
 

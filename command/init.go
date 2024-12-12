@@ -2,7 +2,7 @@ package command
 
 import (
 	"fmt"
-	"jit_vcs/config"
+	"jit/config"
 	"os"
 	"path/filepath"
 )
