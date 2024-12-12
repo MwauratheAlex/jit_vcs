@@ -35,7 +35,7 @@ func AddToIndex(path string) error {
 	if info.IsDir() {
 		// walk
 		return filepath.Walk(
-			absPath,
+			path,
 			func(filePath string, fileInfo fs.FileInfo, walkErr error) error {
 				if walkErr != nil {
 					return walkErr
@@ -45,11 +45,6 @@ func AddToIndex(path string) error {
 					return nil
 				}
 
-				// add files to index
-				_, err := filepath.Rel(absPath, filePath)
-				if err != nil {
-					return err
-				}
 				return AddToIndex(filePath)
 			})
 	}
@@ -59,10 +54,6 @@ func AddToIndex(path string) error {
 	if err != nil {
 		return err
 	}
-
-	// convert %0A to newline
-	fixedContent := strings.ReplaceAll(string(content), "%0A", "\n")
-	content = []byte(fixedContent)
 
 	hash := ComputeHash(content)
 
@@ -75,20 +66,36 @@ func AddToIndex(path string) error {
 	}
 
 	// write to index
+	mode := fmt.Sprintf("%06o", info.Mode().Perm())
+
 	indexPath := filepath.Join(config.REPO_DIR, "index")
-	mode := fmt.Sprintf("%04o", info.Mode().Perm())
+	indexEntries := map[string]string{}
+	if _, err := os.Stat(indexPath); err == nil {
+		content, err := os.ReadFile(indexPath)
+		if err != nil {
+			return err
+		}
 
-	indexEntry := fmt.Sprintf("%s %s %s\n", hash, mode, path)
-
-	f, err := os.OpenFile(indexPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) == 3 {
+				indexEntries[parts[2]] = line
+			}
+		}
 	}
-	defer f.Close()
 
-	_, err = f.WriteString(indexEntry)
+	indexEntries[path] = fmt.Sprintf("%s %s %s", hash, mode, path)
 
-	return err
+	var updatedIndexContent strings.Builder
+	for _, entry := range indexEntries {
+		updatedIndexContent.WriteString(entry + "\n")
+	}
+
+	return os.WriteFile(indexPath, []byte(updatedIndexContent.String()), 0644)
 }
 
 var index Index = nil

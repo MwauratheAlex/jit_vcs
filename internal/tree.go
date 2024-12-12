@@ -257,6 +257,7 @@ func ExtractTree(repoPath, treeHash, dstPath string) error {
 				return fmt.Errorf("failed to read blob %s: %w", hash, err)
 			}
 			fileMode, err := parseMode(modeStr)
+			fmt.Println(fileMode)
 			if err != nil {
 				return fmt.Errorf("failed to parse mode for %s: %w", entryPath,
 					err)

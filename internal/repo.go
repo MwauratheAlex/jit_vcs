@@ -273,33 +273,26 @@ func updateWorkingDirectoryFromTrees(currentTree, targetTree *Tree) error {
 	for _, entry := range currentTree.Entries {
 		currEntries[entry.Name] = entry
 	}
+	fmt.Println()
+	fmt.Println("Rebuilding tree")
+	printTree(targetTree)
+	fmt.Println()
 
 	for _, entry := range targetTree.Entries {
 		path := filepath.Join(".", entry.Name)
-		if currentEntry, exists := currEntries[entry.Name]; exists {
-			// file exists in both trees, check if it needs updating
-			if currentEntry.Hash != entry.Hash {
-				err := extractBlob(entry.Hash, path)
-				if err != nil {
-					return fmt.Errorf("failed to update file '%s': %w", path, err)
-				}
+		if entry.Type == "tree" {
+			err := os.MkdirAll(path, 0755)
+			if err != nil {
+				return fmt.Errorf("failed to create directory '%s': %w", path, err)
+			}
+			err = ExtractTree(".", entry.Hash, ".")
+			if err != nil {
+				return fmt.Errorf("failed to extract directory '%s': %w", path, err)
 			}
 		} else {
-			// file or dir does not exist, create it
-			if entry.Type == "tree" {
-				err := os.MkdirAll(path, 0755)
-				if err != nil {
-					return fmt.Errorf("failed to create directory '%s': %w", path, err)
-				}
-				err = ExtractTree(".", entry.Hash, ".")
-				if err != nil {
-					return fmt.Errorf("failed to extract directory '%s': %w", path, err)
-				}
-			} else {
-				err := extractBlob(entry.Hash, path)
-				if err != nil {
-					return fmt.Errorf("failed to create file '%s': %w", path, err)
-				}
+			err := extractBlob(&entry, path)
+			if err != nil {
+				return fmt.Errorf("failed to create file '%s': %w", path, err)
 			}
 		}
 	}
@@ -307,11 +300,11 @@ func updateWorkingDirectoryFromTrees(currentTree, targetTree *Tree) error {
 }
 
 // extractBlob writes blob with hash to path
-func extractBlob(hash, path string) error {
-	blobPath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, hash)
+func extractBlob(treeEntry *TreeEntry, path string) error {
+	blobPath := filepath.Join(config.REPO_DIR, config.OBJECTS_DIR, treeEntry.Hash)
 	content, err := os.ReadFile(blobPath)
 	if err != nil {
-		return fmt.Errorf("failed to read blob '%s': %w", hash, err)
+		return fmt.Errorf("failed to read blob '%s': %w", treeEntry.Hash, err)
 	}
 
 	err = os.WriteFile(path, content, 0644)
@@ -319,7 +312,12 @@ func extractBlob(hash, path string) error {
 		return fmt.Errorf("failed to write file '%s': %w", path, err)
 	}
 
-	return nil
+	mode, err := parseMode(treeEntry.Mode)
+	if err != nil {
+		return err
+	}
+
+	return os.Chmod(path, mode)
 }
 
 // hasChanges compares headTreeHash, IndexTreeHash, and workingDirHash
@@ -354,6 +352,17 @@ func hasChanges() (bool, error) {
 	hasUncommittedChange := idxTree.Hash != headCommit.TreeID
 	fmt.Println("hasUnstagedChanges: ", hasUnstagedChanges)
 	fmt.Println("hasUncommittedChange: ", hasUncommittedChange)
+
+	fmt.Println()
+	fmt.Println("idxTree")
+	printTree(idxTree)
+	fmt.Println()
+	fmt.Println("workingTree")
+	printTree(workingTree)
+	fmt.Println()
+	fmt.Println("currTree")
+	currTree, err := loadTree(headCommit.TreeID)
+	printTree(currTree)
 
 	return (hasUncommittedChange || hasUnstagedChanges), nil
 }
