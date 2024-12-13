@@ -1,23 +1,61 @@
-# Jit - Version Control System (VCS)
+# JIT Version Control System
 
-Jit is a simple version control system (VCS) implemented in Go. It provides basic functionalities similar to Git, such as initializing a repository, adding files, committing changes, and managing branches.
+JIT is a simple version control system implemented in Go. It allows you to track changes to your files and collaborate with others.
 
 ## Features
 
-- Initialize a new repository
-- Add files to the staging area
-- Commit changes
-- Create and list branches
-- Checkout branches
-- Merge branches
-- View differences between commits
-- Clone repositories
+- Track changes to files
+- Commit changes with messages
+- View commit history
+- Revert to previous versions
 
 ## Installation
 
-To install Jit, clone the repository and build the project:
+To install JIT, clone the repository and install the required dependencies:
 
-```sh
-git clone <repository-url>
-cd jit
-go build -o jit 
+```bash
+git clone https://github.com/MwauratheAlex/jit_vcs.git
+cd jit_vcs
+go install # install the app in your system
+```
+
+## Usage
+
+Initialize a new JIT repository:
+
+```bash
+jit init
+```
+
+Add files to the repository:
+
+```bash
+jit add <file>
+```
+
+Commit changes:
+
+```bash
+jit commit -m "Your commit message"
+```
+
+View commit history:
+
+```bash
+jit log
+```
+
+Revert to a previous commit:
+
+```bash
+jit checkout <commit_id>
+```
+
+## Contributing
+
+Contributions are welcome! Please fork the repository and submit a pull request.
+
+
+## Contact
+
+For any questions or feedback, please contact [mwaurambugua12@gmail.com](mailto:mwaurambugua12@gmail.com).
