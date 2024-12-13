@@ -18,7 +18,6 @@ type Index []IndexEntry
 
 // AddToIndex adds a file with <path> to the staging area
 func AddToIndex(path string) error {
-	//TODO: check if file is ignored
 
 	absPath, err := filepath.Abs(path)
 	if err != nil {
@@ -143,9 +142,13 @@ func saveIndex(index *Index) error {
 // Used for building working directory tree for change detection
 func CreateFakeIndex(basePath string) (*Index, error) {
 	var fakeIndex Index
+	patterns, err := LoadIgnorePatterns()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load .jitignore: %w", err)
+	}
 
 	// Walk the directory structure starting from basePath
-	err := filepath.Walk(basePath, func(path string, info fs.FileInfo, err error) error {
+	err = filepath.Walk(basePath, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -155,6 +158,11 @@ func CreateFakeIndex(basePath string) (*Index, error) {
 			if strings.HasPrefix(path, config.REPO_DIR) {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+
+		if IsIgnonored(path, patterns) {
+			fmt.Printf("skipping ingored file: %s\n", path)
 			return nil
 		}
 

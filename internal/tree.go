@@ -60,6 +60,7 @@ func BuildTreeFromIndex(files *Index) (*Tree, error) {
 		if err != nil {
 			return nil, err
 		}
+		subTree.Save()
 		blobEntries = append(blobEntries, TreeEntry{
 			Type: "tree",
 			Name: dirName,
