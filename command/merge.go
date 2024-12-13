@@ -1,5 +1,7 @@
 package command
 
-func Merge() error {
-	return nil
+import "jit/internal"
+
+func Merge(targetBranch string) error {
+	return internal.MergeCommits(targetBranch)
 }

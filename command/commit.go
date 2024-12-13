@@ -14,7 +14,7 @@ func Commit(message string) error {
 		)
 	}
 
-	commitID, err := internal.CreateCommit(message, time.Now())
+	commitID, err := internal.CreateCommit(message, time.Now(), nil)
 	if err != nil {
 		return fmt.Errorf("Error creating commit: %v\n", err)
 	}

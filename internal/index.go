@@ -140,6 +140,7 @@ func saveIndex(index *Index) error {
 }
 
 // CreateFakeIndex generates a fake index from the current working directory
+// Used for building working directory tree for change detection
 func CreateFakeIndex(basePath string) (*Index, error) {
 	var fakeIndex Index
 

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"jit/config"
 	"os"
@@ -55,6 +56,60 @@ func (c *Commit) Save() (string, error) {
 	return hash, nil
 }
 
+// CreateCommit creates a new commit with <message> and <timestamp>
+func CreateCommit(message string, timestamp time.Time, mergingParent *string) (string, error) {
+	stagedFiles, err := loadIndex()
+	if err != nil {
+		return "", err
+	}
+	if len(*stagedFiles) == 0 {
+		return "", errors.New("no files staged")
+	}
+
+	tree, err := BuildTreeFromIndex(stagedFiles)
+	if err != nil {
+		return "", err
+	}
+	err = tree.Save()
+	if err != nil {
+		return "", err
+	}
+
+	commit := &Commit{
+		Message:   message,
+		Timestamp: timestamp,
+		TreeID:    tree.Hash,
+		ParentIDs: []string{},
+	}
+
+	repoPath, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("could not get current working directory: %w", err)
+	}
+	headCommit, _ := getHEADCommit(repoPath)
+	if headCommit != "" {
+		// first commit will not have any parents
+		commit.ParentIDs = append(commit.ParentIDs, headCommit)
+	}
+
+	if mergingParent != nil {
+		// merge commits have 2 parents
+		commit.ParentIDs = append(commit.ParentIDs, *mergingParent)
+	}
+
+	commitHash, err := commit.Save()
+	if err != nil {
+		return "", err
+	}
+
+	err = updateHEADCommitHash(commitHash)
+	if err != nil {
+		return "", err
+	}
+
+	return commitHash, nil
+}
+
 var c *Commit = nil
 
 // LoadCommit returns the commit with the given <commitHash>
@@ -103,21 +158,22 @@ func LoadCommit(repoPath, commitHash string) (*Commit, error) {
 }
 
 func GetCommitHistory() ([]Commit, error) {
-	var commits []Commit
 
-	repoPath, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("could not get current working directory: %w", err)
-	}
-
-	commitHash, err := getHEADCommit(repoPath)
+	commitHash, err := getHEADCommit(".")
 	if err != nil {
 		return nil, err
 	}
 
+	commits, err := getCommitHistoryFromHash(commitHash)
+
+	return commits, err
+}
+
+func getCommitHistoryFromHash(commitHash string) ([]Commit, error) {
+	var commits []Commit
 	for len(commitHash) > 0 {
 
-		commit, err := LoadCommit(repoPath, commitHash)
+		commit, err := LoadCommit(".", commitHash)
 
 		if err == nil {
 			commits = append(commits, *commit)
@@ -297,5 +353,105 @@ func generateUnifiedDiff(filename, oldContentPath, newContentPath string) string
 		hunks,
 	)
 
+	fmt.Println("diffs")
+	fmt.Println(dmp.DiffPrettyText(diffs))
+	fmt.Println("diffs")
+	for i, d := range diffs {
+		fmt.Println(i, "Diff: ", d.Text, d.Type.String())
+	}
+
+	fmt.Println("diffs")
+
 	return unified
+}
+
+// DiffCommits compares the contents of two commits and
+// Returns a map of filename -> diffmatch.
+func diffCommits(hash1, hash2 string) (map[string][]diffmatchpatch.Diff, error) {
+	currDir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	commit1, err := LoadCommit(currDir, hash1)
+	if err != nil {
+		return nil, err
+	}
+	commit2, err := LoadCommit(currDir, hash2)
+	if err != nil {
+		return nil, err
+	}
+
+	treeHash1 := commit1.TreeID
+	treeHash2 := commit2.TreeID
+
+	// filemaps for each tree
+	filesA, err := buildFileMapFromTree(treeHash1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build filemap for commit %s: %w", hash1, err)
+	}
+
+	filesB, err := buildFileMapFromTree(treeHash2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build filemap for commit %s: %w", hash1, err)
+	}
+
+	diff := make(map[string][]diffmatchpatch.Diff)
+
+	// get all unique paths
+	allPaths := make(map[string]struct{})
+	for path := range filesA {
+		allPaths[path] = struct{}{}
+	}
+	for path := range filesB {
+		allPaths[path] = struct{}{}
+	}
+
+	for path := range allPaths {
+		hashA, inA := filesA[path]
+		hashB, inB := filesB[path]
+
+		switch {
+		case inA && !inB:
+			// file was removed
+			oldContent, err := loadBlobContent(hashA)
+			if err != nil {
+				return nil, err
+			}
+			diff[path] = generateDiff(oldContent, "")
+		case !inA && inB:
+			// file was added
+			newContent, err := loadBlobContent(hashB)
+			if err != nil {
+				return nil, err
+			}
+			diff[path] = generateDiff("", newContent)
+		case inA && inB && hashA != hashB:
+			// file modified
+			oldContent, err := loadBlobContent(hashA)
+			if err != nil {
+				return nil, err
+			}
+			newContent, err := loadBlobContent(hashB)
+			if err != nil {
+				return nil, err
+			}
+			d := generateDiff(oldContent, newContent)
+			if len(d) != 0 {
+				diff[path] = d
+			}
+		default:
+			// no change
+		}
+	}
+
+	return diff, nil
+}
+func generateDiff(oldContentPath, newContentPath string) []diffmatchpatch.Diff {
+	dmp := diffmatchpatch.New()
+	runes1, runes2, lineArray := dmp.DiffLinesToRunes(oldContentPath, newContentPath)
+	diffs := dmp.DiffMainRunes(runes1, runes2, false)
+	diffs = dmp.DiffCharsToLines(diffs, lineArray)
+
+	return diffs
 }
