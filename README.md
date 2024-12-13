@@ -112,6 +112,11 @@ jit checkout <branch-name>
 jit merge <branch-name>
 ```
 
+### Clone Repo
+```bash
+jit clone <repo-to-clone> <destination-folder>
+```
+
 ### Handling Merge Conflicts
 - incase of merge conflicts, conflict markers are added to the file
 - Conflict resolution is not implemented yet
