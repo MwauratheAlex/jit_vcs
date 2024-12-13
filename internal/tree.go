@@ -79,9 +79,9 @@ func BuildTreeFromIndex(files *Index) (*Tree, error) {
 		fmt.Fprintf(&buf, "%s %s %s\n", e.Type, e.Name, e.Hash)
 	}
 
-	fmt.Println("Hashing tree")
-	fmt.Println(buf.String())
-	fmt.Println()
+	// fmt.Println("Hashing tree")
+	// fmt.Println(buf.String())
+	// fmt.Println()
 	treeHash := ComputeHash(buf.Bytes())
 
 	t := &Tree{

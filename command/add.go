@@ -18,6 +18,11 @@ func Add(paths []string) error {
 	}
 
 	for _, path := range paths {
+		if path == "." {
+			return fmt.Errorf("%sNo file specified.%s\nUsage: jit add <file1> <file2> ...",
+				colorRed, colorNone,
+			)
+		}
 		if internal.IsIgnonored(path, patterns) {
 			fmt.Printf("Skipping ingored file: %s\n", path)
 			continue

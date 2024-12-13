@@ -104,16 +104,18 @@ Create a ```bash .jitignore``` file and list the full paths of the files you wan
 Example ```bash .jitignore```
 
 ```bash .jitignore
-README.md
-new_dir/Hello.py
+git.c
+secret.txt
 ```
 
-- This files will be automatically ignored during jit operations
+- This files will be automatically ignored during jit operations.
+- jit also ingores .jit folder and .jitignore itself.
+- this means that the .jitignore folder will not be copied during cloning.
+and in other relevant operations like ```bash jit add <file> ...```
 
 
 ## Issues
-- Ignoring files is not yet implemented
-- Directories can cause issues
+- Refactoring
 
 
 ## Contributing

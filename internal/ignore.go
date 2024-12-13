@@ -31,6 +31,9 @@ func LoadIgnorePatterns() ([]string, error) {
 		patterns = append(patterns, line)
 	}
 
+	// ingore .jit and .jitignore
+	patterns = append(patterns, ".jitignore", ".jit")
+
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}

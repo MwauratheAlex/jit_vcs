@@ -30,6 +30,21 @@ func AddToIndex(path string) error {
 	}
 
 	if info.IsDir() {
+		entries, err := os.ReadDir(absPath)
+		if err != nil {
+			return err
+		}
+		hasFiles := false
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				hasFiles = true
+				break
+			}
+		}
+
+		if !hasFiles {
+			return nil
+		}
 		// walk
 		return filepath.Walk(
 			path,

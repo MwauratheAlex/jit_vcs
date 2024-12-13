@@ -270,6 +270,12 @@ func extractBlob(hash, path string) error {
 	return nil
 }
 
+func printIndex(idx *Index) {
+	for _, i := range *idx {
+		fmt.Println(i)
+	}
+}
+
 // hasChanges compares headTreeHash, IndexTreeHash, and workingDirHash
 // to detect uncommitted  or untracked changes
 func hasChanges() (bool, error) {
@@ -282,6 +288,9 @@ func hasChanges() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to load Index: %w", err)
 	}
+	fmt.Println("Staged Index")
+	printIndex(stagedFiles)
+	fmt.Println()
 
 	// tree in index
 	idxTree, err := BuildTreeFromIndex(stagedFiles)
@@ -293,6 +302,9 @@ func hasChanges() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	fmt.Println("Fake Index")
+	printIndex(fakeWorkingIdx)
+	fmt.Println()
 
 	// workingTree, err := buildWorkingDirectoryTree(".")
 	// if err != nil {
@@ -310,10 +322,33 @@ func hasChanges() (bool, error) {
 
 	hasUnstagedChanges := idxTree.Hash != workingTree.Hash
 	hasUncommittedChange := idxTree.Hash != headCommit.TreeID
-	fmt.Println("hasUnstagedChanges: ", hasUnstagedChanges)
-	fmt.Println("hasUncommittedChange: ", hasUncommittedChange)
+	// fmt.Println("hasUnstagedChanges: ", hasUnstagedChanges)
+	// fmt.Println("hasUncommittedChange: ", hasUncommittedChange)
+	// fmt.Println()
+	// fmt.Println("working tree")
+	// printTree(workingTree)
+	// fmt.Println()
+	// fmt.Println("Index tree")
+	// printTree(idxTree)
+	// fmt.Println()
+	// wkingtree, err := loadTree(headCommit.Hash)
+	// fmt.Println("commitTree")
+	// if err != nil {
+	// 	printTree(wkingtree)
+	// } else {
+	// 	fmt.Println(err)
+	// }
 
 	return (hasUncommittedChange || hasUnstagedChanges), nil
+}
+
+func printTree(tree *Tree) {
+	if tree == nil {
+		return
+	}
+	for _, e := range tree.Entries {
+		fmt.Println(e)
+	}
 }
 
 func updateWorkingDirectory(commitHash string) error {
