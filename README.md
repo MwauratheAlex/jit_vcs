@@ -116,6 +116,7 @@ and in other relevant operations like ```bash jit add <file> ...```
 
 ## Issues
 - Refactoring
+- Needs more comprehensive testing
 
 
 ## Contributing
