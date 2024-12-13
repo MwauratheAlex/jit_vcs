@@ -21,61 +21,61 @@ go install # install the app in your system
 
 ## Usage
 
-### 1. Initialize a new JIT repository:
+### Initialize a new JIT repository:
 
 ```bash
 jit init
 ```
 
-### 2. Add files to the repository:
+### Add files to the repository:
 
 ```bash
 jit add <file>
 ```
 
-### 3. Commit changes:
+### Commit changes:
 
 ```bash
 jit commit -m "Your commit message"
 ```
 
-### 4. View commit history:
+### View commit history:
 
 ```bash
 jit log
 ```
 
-### 5. View commit diffs
+### View commit diffs
 
 ```bash
 jit diff <old-commit-hash> <new-commit-hash>
 ```
 
-### 6. Create new branch
+### Create new branch
 
 ```bash
 jit branch <branch-name>
 ```
 
-### 7. View Branches
+### View Branches
 
 ```bash
 jit branch
 ```
 
-### 8. Switch branch:
+### Switch branch:
 
 ```bash
 jit checkout <branch-name>
 ```
 
-### 9. Merge Branch
+### Merge Branch
 
 ```bash
 jit merge <branch-name>
 ```
 
-### 10. Handling Merge Conflicts
+### Handling Merge Conflicts
 - incase of merge conflicts, conflict markers are added to the file
 - Conflict resolution is not implemented yet
 - Example file with conflicts after merge
@@ -97,7 +97,7 @@ One more thing
 >>>>>>> target_branch
 ```
 
-### 11. Ignoring files
+### Ignoring files
 
 Create a ```bash .jitignore``` file and list the full paths of the files you want to ignore
 
@@ -110,6 +110,10 @@ new_dir/Hello.py
 
 - This files will be automatically ignored during jit operations
 
+
+## Issues
+- Ignoring files is not yet implemented
+- Directories can cause issues
 
 
 ## Contributing
