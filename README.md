@@ -11,13 +11,50 @@ JIT is a simple version control system implemented in Go. It allows you to track
 
 ## Installation
 
-To install JIT, clone the repository and install the required dependencies:
 
+1. Clone the repository
 ```bash
 git clone https://github.com/MwauratheAlex/jit_vcs.git
 cd jit_vcs
-go install # install the app in your system
 ```
+
+2. Resolve dependancies
+```bash
+go mod tidy
+```
+
+3. a. Install jit globally(requires go installed)
+```bash
+go install 
+```
+- ensure your $PATH includes go binaries directory (default is $HOME/go/bin or $GOBIN)
+You can verify this with:
+```bash
+echo $PATH
+```
+- if the directory is not in your $PATH, add it. 
+Example in bash
+```bash
+export PATH=$PATH:$(go env GOPATH)/bin
+```
+
+3. b. Alternatively, build the JIT binary
+```bash
+go build -o jit main.go
+```
+
+- this will create an executable jit binary in the current directory
+ - Copy it to a directory in your $PATH to use globally
+```bash
+cp jit /usr/local/bin/
+```
+
+or Run it directly from any directory.
+```bash
+./jit
+```
+
+
 
 ## Usage
 
