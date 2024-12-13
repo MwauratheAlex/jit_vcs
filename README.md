@@ -54,6 +54,10 @@ or Run it directly from any directory.
 ./jit
 ```
 
+## Testing
+```bash
+go test ./command
+```
 
 
 ## Usage
