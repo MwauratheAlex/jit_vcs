@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"jit/config"
 	"os"
 	"path/filepath"
@@ -454,4 +455,72 @@ func generateDiff(oldContentPath, newContentPath string) []diffmatchpatch.Diff {
 	diffs = dmp.DiffCharsToLines(diffs, lineArray)
 
 	return diffs
+}
+
+// CheckoutLatestCommit recteates the repository in repoPath from .jit
+func CheckoutLatestCommit(repoPath string) error {
+	headCommitHash, err := getHEADCommit(repoPath)
+	if err != nil {
+		return fmt.Errorf("failed to read HEAD: %w", err)
+	}
+
+	headCommit, err := LoadCommit(repoPath, headCommitHash)
+	if err != nil {
+		return fmt.Errorf("failed to read commit object %s: %w", headCommitHash, err)
+	}
+
+	treeHash := headCommit.TreeID
+
+	return ExtractTree(repoPath, treeHash, repoPath)
+}
+
+// getHEADCommit returns the <hash> of latest commit
+func getHEADCommit(repoPath string) (string, error) {
+	ref, err := os.ReadFile(filepath.Join(
+		repoPath, config.REPO_DIR, config.HEAD_PATH))
+	if err != nil {
+		return "", err
+	}
+	refPath := strings.TrimSpace(string(ref))
+	if strings.HasPrefix(refPath, "ref:") {
+		refPath = filepath.Join(
+			repoPath, config.REPO_DIR,
+			strings.TrimSpace(strings.TrimPrefix(refPath, "ref:")),
+		)
+		// we read the file master to get latest commit
+		hash, err := os.ReadFile(refPath)
+		if err != nil {
+			// we cannot create a branch if master does not exist
+			if errors.Is(err, fs.ErrNotExist) {
+				return "", fmt.Errorf("fatal: no valid object named 'master'")
+			}
+			return "", err
+		}
+		// else it has the hash of the latest commit
+		return strings.TrimSpace(string(hash)), nil
+	}
+	return refPath, nil
+}
+
+// updateHEAD changes HEAD to point to <commitHash>
+func updateHEADCommitHash(commitHash string) error {
+	headContent, err := os.ReadFile(
+		filepath.Join(config.REPO_DIR, config.HEAD_PATH),
+	)
+	if err != nil {
+		return err
+	}
+
+	refLine := strings.TrimSpace(string(headContent))
+	if strings.HasPrefix(refLine, "ref:") {
+		refRelPath := strings.TrimSpace(strings.TrimPrefix(refLine, "ref:"))
+		refFilepath := filepath.Join(config.REPO_DIR, refRelPath)
+		return os.WriteFile(refFilepath, []byte(commitHash+"\n"), 0644)
+	} else {
+		// for jit checkout <commithash>, HEAD -> commit (not implemented)
+		return os.WriteFile(
+			filepath.Join(config.REPO_DIR, config.HEAD_PATH),
+			[]byte(commitHash), 0644,
+		)
+	}
 }

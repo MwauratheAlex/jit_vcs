@@ -262,3 +262,12 @@ func ExtractTree(repoPath, treeHash, dstPath string) error {
 	}
 	return nil
 }
+
+func printTree(tree *Tree) {
+	if tree == nil {
+		return
+	}
+	for _, e := range tree.Entries {
+		fmt.Println(e)
+	}
+}

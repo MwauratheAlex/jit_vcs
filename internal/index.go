@@ -210,3 +210,33 @@ func CreateFakeIndex(basePath string) (*Index, error) {
 
 	return &fakeIndex, nil
 }
+
+// updateIndexFromTree updates the index given a tree hash
+func updateIndexFromTree(treeHash string) error {
+	tree, err := loadTree(treeHash)
+	if err != nil {
+		return fmt.Errorf("failed to load tree: %w", err)
+	}
+
+	var index Index
+	for _, entry := range tree.Entries {
+		index = append(index, IndexEntry{
+			Filepath: entry.Name,
+			Hash:     entry.Hash,
+		})
+	}
+
+	err = saveIndex(&index)
+	if err != nil {
+		return fmt.Errorf("failed to save index: %w", err)
+	}
+
+	return nil
+}
+
+// printIndex prints an Index for debugging
+func printIndex(idx *Index) {
+	for _, i := range *idx {
+		fmt.Println(i)
+	}
+}
