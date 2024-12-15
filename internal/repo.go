@@ -131,9 +131,9 @@ func hasChanges() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to load Index: %w", err)
 	}
-	fmt.Println("Staged Index")
-	printIndex(stagedFiles)
-	fmt.Println()
+	// fmt.Println("Staged Index")
+	// printIndex(stagedFiles)
+	// fmt.Println()
 
 	// tree in index
 	idxTree, err := BuildTreeFromIndex(stagedFiles)
@@ -145,14 +145,15 @@ func hasChanges() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	fmt.Println("Fake Index")
-	printIndex(fakeWorkingIdx)
-	fmt.Println()
+	// fmt.Println("Fake Index")
+	// printIndex(fakeWorkingIdx)
+	// fmt.Println()
 
 	// workingTree, err := buildWorkingDirectoryTree(".")
 	// if err != nil {
 	// 	return false, fmt.Errorf("failed to build working directory tree")
 	// }
+
 	workingTree, err := BuildTreeFromIndex(fakeWorkingIdx)
 	if err != nil {
 		return false, err
@@ -165,8 +166,8 @@ func hasChanges() (bool, error) {
 
 	hasUnstagedChanges := idxTree.Hash != workingTree.Hash
 	hasUncommittedChange := idxTree.Hash != headCommit.TreeID
-	// fmt.Println("hasUnstagedChanges: ", hasUnstagedChanges)
-	// fmt.Println("hasUncommittedChange: ", hasUncommittedChange)
+	fmt.Println("hasUnstagedChanges: ", hasUnstagedChanges)
+	fmt.Println("hasUncommittedChange: ", hasUncommittedChange)
 	// fmt.Println()
 	// fmt.Println("working tree")
 	// printTree(workingTree)

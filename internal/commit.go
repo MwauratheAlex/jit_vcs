@@ -354,14 +354,14 @@ func generateUnifiedDiff(filename, oldContentPath, newContentPath string) string
 		hunks,
 	)
 
-	fmt.Println("diffs")
-	fmt.Println(dmp.DiffPrettyText(diffs))
-	fmt.Println("diffs")
-	for i, d := range diffs {
-		fmt.Println(i, "Diff: ", d.Text, d.Type.String())
-	}
+	// fmt.Println("diffs")
+	// fmt.Println(dmp.DiffPrettyText(diffs))
+	// fmt.Println("diffs")
+	// for i, d := range diffs {
+	// 	fmt.Println(i, "Diff: ", d.Text, d.Type.String())
+	// }
 
-	fmt.Println("diffs")
+	// fmt.Println("diffs")
 
 	return unified
 }

@@ -71,7 +71,13 @@ jit init
 ### Add files to the repository:
 
 ```bash
-jit add <file>
+jit add file1 file2 README.md
+```
+
+### Ignore files
+- add the files to .jitignore
+```bash
+echo file2 .jitignore
 ```
 
 ### Commit changes:
@@ -161,7 +167,6 @@ and in other relevant operations like ```jit add <file> ...```
 
 
 ## Issues
-- Refactoring
 - Needs more comprehensive testing
 
 

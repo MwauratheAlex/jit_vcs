@@ -220,6 +220,7 @@ func updateIndexFromTree(treeHash string) error {
 
 	var index Index
 	for _, entry := range tree.Entries {
+		fmt.Println(entry)
 		index = append(index, IndexEntry{
 			Filepath: entry.Name,
 			Hash:     entry.Hash,

@@ -107,20 +107,29 @@ func CheckoutBranch(branchName string) error {
 	}
 
 	// update index to match target branch
-	targetCommit, err := LoadCommit(".", branchHash)
-	if err != nil {
-		return fmt.Errorf("failed to load target branch commit: %w", err)
-	}
+	// targetCommit, err := LoadCommit(".", branchHash)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to load target branch commit: %w", err)
+	// }
 
-	err = updateIndexFromTree(targetCommit.TreeID)
-	if err != nil {
-		return fmt.Errorf("failed to update index: %w", err)
-	}
+	// err = updateIndexFromTree(targetCommit.TreeID)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to update index: %w", err)
+	// }
 
 	err = rebuildWorkingDirectory(currHeadHash, branchHash)
 	if err != nil {
 		return fmt.Errorf("failed to rebuild working directory: %w", err)
 	}
+
+	// update index to match target branch
+	// working dir index
+	workingDirIndex, err := CreateFakeIndex(".")
+	if err != nil {
+		return fmt.Errorf("Error getting updated working dir index")
+	}
+
+	saveIndex(workingDirIndex)
 
 	// update HEAD to point to new branch
 	err = changeHEAD(branchName)
