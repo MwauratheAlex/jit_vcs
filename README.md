@@ -65,7 +65,10 @@ go test ./command
 ### Initialize a new JIT repository:
 
 ```bash
-jit init
+mkdir new_repo # create new_repo directory
+cd new_repo # change into the new_repo directory
+
+jit init # Initialize Repository
 ```
 
 ### Add files to the repository:
