@@ -306,11 +306,6 @@ func walkTree(prefix, treeHash string, result map[string]string) error {
 
 		fullPath := filepath.Join(prefix, name)
 
-		// fullPath := name
-		// if prefix == "" {
-		// 	fullPath = prefix + "/" + name
-		// }
-
 		switch typ {
 		case "tree":
 			if err := walkTree(fullPath, hash, result); err != nil {
